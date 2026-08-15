@@ -22,7 +22,7 @@ def main():
     r_trends = httpx.get("http://127.0.0.1:8000/api/dashboard/trends", headers=headers)
     print(f"GET /api/dashboard/trends: {r_trends.status_code}, media_types: {len(r_trends.json()['media_distribution'])}")
 
-    print("\n--- 4. List Analyses ---")
+    print("\n--- 4. List Anal yses ---")
     r_list = httpx.get("http://127.0.0.1:8000/api/analysis", headers=headers)
     analyses = r_list.json()
     print(f"GET /api/analysis: {r_list.status_code}, Total: {analyses['total']}, Items: {len(analyses['items'])}")
