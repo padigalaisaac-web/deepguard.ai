@@ -76,6 +76,7 @@ def predict_ai_probability(image: Image.Image):
         ai_probability = float(
             probabilities[1] * 100.0
         )
+        print(f"AI MODEL SCORE:{ai_probability:.2f}%")
 
         return round(
             max(
