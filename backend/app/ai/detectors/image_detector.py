@@ -109,37 +109,41 @@ class ImageDeepfakeDetector(BaseDetector):
         if laplacian_var > 400.0:
             ai_probability -= 15.0 # Natural physical optical sensor grain / camera noise
             
-        # Clamp score between 4.0% and 98.5%
+                # Clamp score between 4.0% and 98.5%
         ai_probability = max(4.0, min(98.5, ai_probability))
 
         # Real ML model prediction
-model_ai_probability = predict_ai_probability(img_rgb)
+        model_ai_probability = predict_ai_probability(img_rgb)
 
-if model_ai_probability is not None:
-    # Give the trained model the strongest influence.
-    ai_probability = (
-        0.80 * model_ai_probability +
-        0.20 * ai_probability
-    )
+        if model_ai_probability is not None:
+            # Give the trained model the strongest influence
+            ai_probability = (
+                0.80 * model_ai_probability +
+                0.20 * ai_probability
+            )
 
-    ai_probability = max(
-        1.0,
-        min(99.0, ai_probability)
-    )
-        
+            ai_probability = max(
+                1.0,
+                min(99.0, ai_probability)
+            )
+
+        # 6. Classification Decision
         indicators: List[IndicatorResult] = []
-        
-        # 6. Classification Decision (RED for AI Generated, GREEN for Real/Authentic, AMBER for Suspicious)
+
+        # RED for AI Generated, GREEN for Real/Authentic, AMBER for Suspicious
         if ai_probability >= 50.0:
             result = "LIKELY_DEEPFAKE"
             risk_level = "HIGH" if ai_probability >= 75.0 else "MEDIUM"
             confidence = round(ai_probability, 1)
             authenticity_score = round(100.0 - confidence, 1)
             explanation_summary = (
-                "AI GENERATION DETECTED (YES): The forensic analysis identified strong synthetic generation signatures, "
-                "including 2D FFT spectral anomalies, hyper-saturated chromatic channel imbalance, and generative texture synthesis."
+                "AI GENERATION DETECTED (YES): The analysis identified strong "
+                "synthetic generation signatures, including 2D FFT spectral "
+                "anomalies, hyper-saturated chromatic channel imbalance, "
+                "and generative texture synthesis."
             )
-            
+
+
             if fft_variance > 380.0:
                 indicators.append(IndicatorResult(
                     name="Generative Spectral Grid Resonance",
