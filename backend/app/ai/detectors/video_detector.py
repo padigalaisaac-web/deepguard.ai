@@ -27,63 +27,73 @@ class VideoDeepfakeDetector(BaseDetector):
         # 1. Sample Frames & Metadata
         frames, timestamps, metadata = VideoPreprocessor.extract_frames(file_path, max_frames=12)
         # Analyze video frames with the AI image detector
+               
+        frame_ai_scores = []
 
-frame_ai_scores = []
+        for frame in frames:
+            try:
+                if isinstance(frame, Image.Image):
+                    frame_image = frame.convert("RGB")
+                else:
+                    frame_array = np.asarray(frame).astype(np.uint8)
+                    frame_image = Image.fromarray(frame_array).convert("RGB")
 
-for frame in frames:
-    try:
-        if isinstance(frame, Image.Image):
-            frame_image = frame.convert("RGB")
-        else:
-            frame_array = np.asarray(frame).astype(np.uint8)
-            frame_image = Image.fromarray(frame_array).convert("RGB")
+                score = predict_ai_probability(frame_image)
 
-        score = predict_ai_probability(frame_image)
+                if score is not None:
+                    frame_ai_scores.append(score)
 
-        if score is not None:
-            frame_ai_scores.append(score)
+            except Exception as exc:
+                print(f"Frame AI detection error: {exc}")
 
-    except Exception as exc:
-        print(f"Frame AI detection error: {exc}")
-        
         if frame_ai_scores:
-    frame_ai_probability = float(np.median(frame_ai_scores))
-    peak_ai_probability = float(max(frame_ai_scores))
-else:
-    frame_ai_probability = 0.0
-    peak_ai_probability = 0.0
+            frame_ai_probability = float(np.median(frame_ai_scores))
+            peak_ai_probability = float(max(frame_ai_scores))
+        else:
+            frame_ai_probability = 0.0
+            peak_ai_probability = 0.0
+
         # 2. Extract Temporal Features
         temporal_metrics = VideoFeatureExtractor.analyze_temporal_consistency(frames, timestamps)
         
-        # 3. Deterministic scoring
+                # 3. File integrity hash
         with open(file_path, "rb") as f:
             file_hash = hashlib.sha256(f.read()).hexdigest()
-            
-        hash_val = int(file_hash[:8], 16) % 1000 / 1000.0  # 0.0 - 1.0
-        
-        jitter_factor = min(1.0, max(0.0, temporal_metrics["temporal_jitter_variance"] / 200.0))
-        delta_factor = min(1.0, max(0.0, temporal_metrics["avg_temporal_delta"] / 100.0))
-        temporal_score = (
-    0.60 * (jitter_factor * 100.0) +
-    0.40 * (delta_factor * 100.0)
-)
 
-composite_score = (
-    0.75 * frame_ai_probability +
-    0.25 * temporal_score
-)
-
-composite_score = max(
-    1.0,
-    min(99.0, composite_score)
-)
-        composite_score = (
-            0.40 * (hash_val * 100.0) +
-            0.35 * (jitter_factor * 100.0) +
-            0.25 * (delta_factor * 100.0)
+        jitter_factor = min(
+            1.0,
+            max(
+                0.0,
+                temporal_metrics["temporal_jitter_variance"] / 200.0
+            )
         )
-        composite_score = max(5.0, min(98.2, composite_score))
-        
+
+        delta_factor = min(
+            1.0,
+            max(
+                0.0,
+                temporal_metrics["avg_temporal_delta"] / 100.0
+            )
+        )
+
+        # Temporal forensic score
+        temporal_score = (
+            0.60 * (jitter_factor * 100.0) +
+            0.40 * (delta_factor * 100.0)
+        )
+
+        # Final AI video score
+        # 75% AI model + 25% temporal analysis
+        composite_score = (
+            0.75 * frame_ai_probability +
+            0.25 * temporal_score
+        )
+
+        composite_score = max(
+            1.0,
+            min(99.0, composite_score)
+        )
+
         indicators: List[IndicatorResult] = []
         
         if composite_score >= 60.0:
@@ -174,6 +184,10 @@ composite_score = max(
             **metadata,
             **temporal_metrics,
             "frames_analyzed": len(frames),
+            "ai_frame_probability": round(frame_ai_probability, 2),
+            "peak_ai_frame_probability": round(peak_ai_probability, 2),
+            "temporal_score": round(temporal_score, 2),
+            "final_ai_probability": round(composite_score, 2),
             "file_sha256": file_hash,
             "original_filename": original_filename
         }
