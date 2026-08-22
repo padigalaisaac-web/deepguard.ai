@@ -1,4 +1,4 @@
-```python
+
 import numpy as np
 from PIL import Image
 from functools import lru_cache
@@ -121,4 +121,4 @@ def predict_ai_probability(image: Image.Image) -> float:
         ),
         2,
     )
-```
+
