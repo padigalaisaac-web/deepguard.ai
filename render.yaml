@@ -17,7 +17,7 @@ services:
 
   # Frontend React Static Site
   - type: web
-    name: deepguard-frontend
+    name: deepfake-ai
     runtime: static
     buildCommand: "cd frontend && npm install && npm run build"
     staticPublishPath: "./frontend/dist"
@@ -27,7 +27,5 @@ services:
         destination: /index.html
     envVars:
       - key: VITE_API_URL
-        fromService:
-          type: web
-          name: deepguard-backend
-          property: host
+  value: "https://deepguard-backend-0x0q.onrender.com"
+https://deepguard-backend-0x0q.onrender.com
