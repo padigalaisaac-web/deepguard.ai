@@ -439,4 +439,4 @@ class ImageDeepfakeDetector(BaseDetector):
 
             heatmap_path=heatmap_url,
         )
-```
+
