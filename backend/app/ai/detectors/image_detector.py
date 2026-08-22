@@ -192,7 +192,7 @@ class ImageDeepfakeDetector(BaseDetector):
         # >= 50% = AI GENERATED = RED
         # < 50%  = NOT AI GENERATED = GREEN
         # ---------------------------------------------------------
-        if ai_probability >= 50.0:
+        if ai_probability >= 65.0:
 
             result = "LIKELY_DEEPFAKE"
             risk_level = "HIGH"
