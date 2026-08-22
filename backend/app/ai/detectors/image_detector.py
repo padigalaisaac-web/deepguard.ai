@@ -10,6 +10,7 @@ from app.ai.detectors.base_detector import BaseDetector, DetectionOutput, Indica
 from app.ai.preprocessing.image_preprocessor import ImagePreprocessor
 from app.ai.features.image_features import ImageFeatureExtractor
 from app.ai.explainability.image_explainability import ImageExplainability
+from app.ai.detectors.real_ai_detector import predict_ai_probability
 
 class ImageDeepfakeDetector(BaseDetector):
     def __init__(self):
@@ -110,6 +111,21 @@ class ImageDeepfakeDetector(BaseDetector):
             
         # Clamp score between 4.0% and 98.5%
         ai_probability = max(4.0, min(98.5, ai_probability))
+
+        # Real ML model prediction
+model_ai_probability = predict_ai_probability(img_rgb)
+
+if model_ai_probability is not None:
+    # Give the trained model the strongest influence.
+    ai_probability = (
+        0.80 * model_ai_probability +
+        0.20 * ai_probability
+    )
+
+    ai_probability = max(
+        1.0,
+        min(99.0, ai_probability)
+    )
         
         indicators: List[IndicatorResult] = []
         
