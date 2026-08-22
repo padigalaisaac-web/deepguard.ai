@@ -60,7 +60,21 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
     }
 
     // Default JSON
-    return (await response.json()) as T;
+    // Default JSON
+const text = await response.text();
+
+if (!text.trim()) {
+  return {} as T;
+}
+
+try {
+  return JSON.parse(text) as T;
+} catch {
+  throw new ApiError(
+    `Server returned invalid JSON. Status: ${response.status}`,
+    response.status
+  );
+}
   } catch (err: any) {
     if (err instanceof ApiError) {
       throw err;
