@@ -3,12 +3,15 @@ import hashlib
 from pathlib import Path
 from typing import List
 import numpy as np
+from PIL import Image
+import cv2
 
 from app.core.config import settings
 from app.ai.detectors.base_detector import BaseDetector, DetectionOutput, IndicatorResult, FrameAnomaly
 from app.ai.preprocessing.video_preprocessor import VideoPreprocessor
 from app.ai.features.video_features import VideoFeatureExtractor
 from app.ai.explainability.video_explainability import VideoExplainability
+from app.ai.detectors.real_ai_detector import predict_ai_probability
 
 class VideoDeepfakeDetector(BaseDetector):
     def __init__(self):
@@ -23,7 +26,32 @@ class VideoDeepfakeDetector(BaseDetector):
         
         # 1. Sample Frames & Metadata
         frames, timestamps, metadata = VideoPreprocessor.extract_frames(file_path, max_frames=12)
+        # Analyze video frames with the AI image detector
+
+frame_ai_scores = []
+
+for frame in frames:
+    try:
+        if isinstance(frame, Image.Image):
+            frame_image = frame.convert("RGB")
+        else:
+            frame_array = np.asarray(frame).astype(np.uint8)
+            frame_image = Image.fromarray(frame_array).convert("RGB")
+
+        score = predict_ai_probability(frame_image)
+
+        if score is not None:
+            frame_ai_scores.append(score)
+
+    except Exception as exc:
+        print(f"Frame AI detection error: {exc}")
         
+        if frame_ai_scores:
+    frame_ai_probability = float(np.median(frame_ai_scores))
+    peak_ai_probability = float(max(frame_ai_scores))
+else:
+    frame_ai_probability = 0.0
+    peak_ai_probability = 0.0
         # 2. Extract Temporal Features
         temporal_metrics = VideoFeatureExtractor.analyze_temporal_consistency(frames, timestamps)
         
@@ -35,7 +63,20 @@ class VideoDeepfakeDetector(BaseDetector):
         
         jitter_factor = min(1.0, max(0.0, temporal_metrics["temporal_jitter_variance"] / 200.0))
         delta_factor = min(1.0, max(0.0, temporal_metrics["avg_temporal_delta"] / 100.0))
-        
+        temporal_score = (
+    0.60 * (jitter_factor * 100.0) +
+    0.40 * (delta_factor * 100.0)
+)
+
+composite_score = (
+    0.75 * frame_ai_probability +
+    0.25 * temporal_score
+)
+
+composite_score = max(
+    1.0,
+    min(99.0, composite_score)
+)
         composite_score = (
             0.40 * (hash_val * 100.0) +
             0.35 * (jitter_factor * 100.0) +
