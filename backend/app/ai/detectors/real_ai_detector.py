@@ -1,3 +1,4 @@
+```python
 import numpy as np
 from PIL import Image
 from functools import lru_cache
@@ -13,49 +14,111 @@ MODEL_FILE = "onnx/model_quantized.onnx"
 def get_session():
     model_path = hf_hub_download(
         repo_id=MODEL_REPO,
-        filename=MODEL_FILE
+        filename=MODEL_FILE,
     )
 
     return ort.InferenceSession(
         model_path,
-        providers=["CPUExecutionProvider"]
+        providers=["CPUExecutionProvider"],
     )
 
 
-def _softmax(x):
-    x = x - np.max(x, axis=-1, keepdims=True)
-    exp = np.exp(x)
-    return exp / np.sum(exp, axis=-1, keepdims=True)
+def _softmax(logits):
+    logits = logits - np.max(
+        logits,
+        axis=-1,
+        keepdims=True,
+    )
+
+    exp_values = np.exp(logits)
+
+    return exp_values / np.sum(
+        exp_values,
+        axis=-1,
+        keepdims=True,
+    )
 
 
-def predict_ai_probability(image: Image.Image):
-    try:
-        image = image.convert("RGB")
-        image = image.resize((224, 224), Image.Resampling.BILINEAR)
+def predict_ai_probability(image: Image.Image) -> float:
+    """
+    Returns estimated AI-generated probability from 0-100.
 
-        arr = np.asarray(image).astype(np.float32) / 255.0
+    0   = likely real
+    100 = likely AI-generated
+    """
 
-        # Model uses mean/std = 0.5
-        arr = (arr - 0.5) / 0.5
+    image = image.convert("RGB")
 
-        # HWC -> CHW -> batch
-        arr = np.transpose(arr, (2, 0, 1))
-        arr = np.expand_dims(arr, axis=0).astype(np.float32)
+    # Model input size
+    image = image.resize(
+        (224, 224),
+        Image.Resampling.BILINEAR,
+    )
 
-        session = get_session()
+    # Convert image to float32
+    image_array = (
+        np.asarray(image)
+        .astype(np.float32)
+        / 255.0
+    )
 
-        input_name = session.get_inputs()[0].name
-        output = session.run(None, {input_name: arr})[0]
+    # Model normalization
+    image_array = (
+        image_array - 0.5
+    ) / 0.5
 
-        probabilities = _softmax(output)[0]
+    # HWC -> CHW
+    image_array = np.transpose(
+        image_array,
+        (2, 0, 1),
+    )
 
-        # Model labels:
-        # 0 = fake
-        # 1 = real
-        ai_probability = float(probabilities[0] * 100.0)
+    # Add batch dimension
+    image_array = np.expand_dims(
+        image_array,
+        axis=0,
+    ).astype(np.float32)
 
-        return round(ai_probability, 2)
+    session = get_session()
 
-    except Exception as exc:
-        print(f"AI detector error: {exc}")
-        return None
+    input_name = session.get_inputs()[0].name
+
+    outputs = session.run(
+        None,
+        {
+            input_name: image_array
+        },
+    )
+
+    if not outputs:
+        raise RuntimeError(
+            "AI model returned no output."
+        )
+
+    logits = outputs[0]
+
+    # Convert logits to probabilities
+    probabilities = _softmax(logits)[0]
+
+    if len(probabilities) < 2:
+        raise RuntimeError(
+            "AI model returned an unexpected output shape."
+        )
+
+    # Model class 0 = fake / AI-generated
+    # Model class 1 = real
+    fake_probability = float(
+        probabilities[0] * 100.0
+    )
+
+    return round(
+        max(
+            0.0,
+            min(
+                100.0,
+                fake_probability,
+            ),
+        ),
+        2,
+    )
+```
