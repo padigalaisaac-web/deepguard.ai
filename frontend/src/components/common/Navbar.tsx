@@ -47,7 +47,7 @@ export const Navbar: React.FC = () => {
             <div>
               <div className="flex items-center gap-1.5">
                 <span className="text-lg font-black tracking-wider text-slate-100 uppercase">
-                  Deep<span className="text-cyan-400">Fake</span>
+                  Deep<span className="text-cyan-400">Guard</span>
                 </span>
                 <span className="text-[10px] font-mono font-bold px-1.5 py-0.2 rounded bg-cyan-500/10 text-cyan-400 border border-cyan-500/30">
                   AI
