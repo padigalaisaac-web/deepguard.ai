@@ -1,11 +1,7 @@
 import { supabase } from '../lib/supabase';
 
 export const authService = {
-  async register(
-    name: string,
-    email: string,
-    password: string
-  ) {
+  async register(name: string, email: string, password: string) {
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
@@ -19,10 +15,7 @@ export const authService = {
 
     if (error) throw new Error(error.message);
 
-    return {
-      user: data.user,
-      session: data.session,
-    };
+    return data;
   },
 
   async login(email: string, password: string) {
@@ -34,10 +27,7 @@ export const authService = {
 
     if (error) throw new Error(error.message);
 
-    return {
-      user: data.user,
-      session: data.session,
-    };
+    return data;
   },
 
   async logout() {
@@ -57,10 +47,29 @@ export const authService = {
   async updateProfile(updates: {
     name?: string;
     role?: string;
+    password?: string;
   }) {
-    const { data, error } = await supabase.auth.updateUser({
-      data: updates,
-    });
+    const userData: {
+      data?: {
+        name?: string;
+        role?: string;
+      };
+      password?: string;
+    } = {};
+
+    if (updates.name || updates.role) {
+      userData.data = {
+        name: updates.name,
+        role: updates.role,
+      };
+    }
+
+    if (updates.password) {
+      userData.password = updates.password;
+    }
+
+    const { data, error } =
+      await supabase.auth.updateUser(userData);
 
     if (error) throw new Error(error.message);
 
