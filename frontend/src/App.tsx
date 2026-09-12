@@ -1,13 +1,20 @@
 import React from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import {
+  BrowserRouter,
+  Routes,
+  Route,
+  Navigate,
+} from 'react-router-dom';
+
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
+
 import { Navbar } from './components/common/Navbar';
 import { Sidebar } from './components/common/Sidebar';
 import { Footer } from './components/common/Footer';
 
 // Pages
-import  LandingPage  from './pages/LandingPage';
+import LandingPage from './pages/LandingPage';
 import { LoginPage } from './pages/LoginPage';
 import { RegisterPage } from './pages/RegisterPage';
 import { DashboardPage } from './pages/DashboardPage';
@@ -24,8 +31,11 @@ import { PrivacyPage } from './pages/PrivacyPage';
 import { NotFoundPage } from './pages/NotFoundPage';
 
 // Protected Route wrapper
-const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+const ProtectedRoute: React.FC<{
+  children: React.ReactNode;
+}> = ({ children }) => {
   const { isAuthenticated, isLoading } = useAuth();
+
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-950">
@@ -33,15 +43,20 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
       </div>
     );
   }
+
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
   }
+
   return <>{children}</>;
 };
 
 // Admin Route wrapper
-const AdminRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+const AdminRoute: React.FC<{
+  children: React.ReactNode;
+}> = ({ children }) => {
   const { isAuthenticated, isAdmin, isLoading } = useAuth();
+
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-950">
@@ -49,39 +64,53 @@ const AdminRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       </div>
     );
   }
+
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
   }
+
   if (!isAdmin) {
     return <Navigate to="/dashboard" replace />;
   }
+
   return <>{children}</>;
 };
 
-// Dashboard Layout wrapper with Sidebar
-const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+// Dashboard layout with Sidebar
+const DashboardLayout: React.FC<{
+  children: React.ReactNode;
+}> = ({ children }) => {
   return (
     <div className="flex min-h-[calc(100vh-4rem)]">
       <Sidebar />
-      <main className="flex-1 overflow-y-auto bg-slate-950/40">{children}</main>
+
+      <main className="flex-1 overflow-y-auto bg-slate-950/40">
+        {children}
+      </main>
     </div>
   );
 };
 
+// Application routes
 export const AppContent: React.FC = () => {
   return (
     <div className="min-h-screen flex flex-col bg-slate-950 text-slate-100 selection:bg-cyan-500 selection:text-slate-950">
       <Navbar />
+
       <div className="flex-1">
         <Routes>
           {/* Public Routes */}
           <Route path="/" element={<LandingPage />} />
+
           <Route path="/login" element={<LoginPage />} />
+
           <Route path="/register" element={<RegisterPage />} />
+
           <Route path="/about" element={<AboutPage />} />
+
           <Route path="/privacy" element={<PrivacyPage />} />
 
-          {/* Protected User Workspace Routes */}
+          {/* Protected User Routes */}
           <Route
             path="/dashboard"
             element={
@@ -92,6 +121,7 @@ export const AppContent: React.FC = () => {
               </ProtectedRoute>
             }
           />
+
           <Route
             path="/analyze"
             element={
@@ -102,6 +132,7 @@ export const AppContent: React.FC = () => {
               </ProtectedRoute>
             }
           />
+
           <Route
             path="/analysis/:id"
             element={
@@ -112,6 +143,7 @@ export const AppContent: React.FC = () => {
               </ProtectedRoute>
             }
           />
+
           <Route
             path="/analysis/:id/report"
             element={
@@ -120,6 +152,7 @@ export const AppContent: React.FC = () => {
               </ProtectedRoute>
             }
           />
+
           <Route
             path="/history"
             element={
@@ -130,6 +163,7 @@ export const AppContent: React.FC = () => {
               </ProtectedRoute>
             }
           />
+
           <Route
             path="/profile"
             element={
@@ -152,6 +186,7 @@ export const AppContent: React.FC = () => {
               </AdminRoute>
             }
           />
+
           <Route
             path="/admin/users"
             element={
@@ -162,6 +197,7 @@ export const AppContent: React.FC = () => {
               </AdminRoute>
             }
           />
+
           <Route
             path="/admin/logs"
             element={
@@ -177,11 +213,13 @@ export const AppContent: React.FC = () => {
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
       </div>
+
       <Footer />
     </div>
   );
 };
 
+// Main App
 export default function App() {
   return (
     <BrowserRouter>
