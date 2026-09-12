@@ -7,7 +7,7 @@ import { Sidebar } from './components/common/Sidebar';
 import { Footer } from './components/common/Footer';
 
 // Pages
-import { LandingPage } from './pages/LandingPage';
+import  LandingPage  from './pages/LandingPage';
 import { LoginPage } from './pages/LoginPage';
 import { RegisterPage } from './pages/RegisterPage';
 import { DashboardPage } from './pages/DashboardPage';
