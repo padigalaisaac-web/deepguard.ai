@@ -1,31 +1,74 @@
-import { api } from './api';
-import { AuthResponse, User } from '../types';
+import { supabase } from '../lib/supabase';
 
 export const authService = {
-  login: async (email: string, password: string): Promise<AuthResponse> => {
-    return api.post<AuthResponse>('/auth/login', { email, password });
+  async register(
+    name: string,
+    email: string,
+    password: string
+  ) {
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: {
+          name,
+        },
+      },
+    });
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    return {
+      user: data.user,
+      session: data.session,
+    };
   },
 
-  register: async (name: string, email: string, password: string): Promise<AuthResponse> => {
-    return api.post<AuthResponse>('/auth/register', { name, email, password });
+  async login(email: string, password: string) {
+    const { data, error } =
+      await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    return {
+      user: data.user,
+      session: data.session,
+    };
   },
 
-  logout: async (): Promise<void> => {
-    try {
-      await api.post('/auth/logout');
-    } catch {
-      // Ignore network errors on logout
-    } finally {
-      localStorage.removeItem('deepguard_token');
-      localStorage.removeItem('deepguard_user');
+  async logout() {
+    const { error } = await supabase.auth.signOut();
+
+    if (error) {
+      throw new Error(error.message);
     }
   },
 
-  getMe: async (): Promise<User> => {
-    return api.get<User>('/auth/me');
+  async getCurrentUser() {
+    const {
+      data: { user },
+      error,
+    } = await supabase.auth.getUser();
+
+    if (error) {
+      return null;
+    }
+
+    return user;
   },
 
-  updateProfile: async (data: { name?: string; password?: string }): Promise<User> => {
-    return api.patch<User>('/auth/profile', data);
+  async getSession() {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+
+    return session;
   },
 };
