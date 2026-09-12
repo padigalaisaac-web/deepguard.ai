@@ -111,11 +111,13 @@ try {
 
   const uploadRes = await analysisService.uploadMedia(selectedFile);
 
-  const analysisId =
-    uploadRes?.analysis_id ||
-    uploadRes?.id ||
-    uploadRes?.data?.analysis_id ||
-    uploadRes?.data?.id;
+  const analysisId = uploadRes.analysis_id;
+
+if (!analysisId) {
+  throw new Error(
+    'Analysis ID was not returned after uploading the media file.'
+  );
+}
 
   console.log('Upload response:', uploadRes);
   console.log('Analysis ID:', analysisId);
