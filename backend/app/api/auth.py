@@ -1,7 +1,7 @@
 import os
 
-from fastapi import Depends, HTTPException
-from fastapi.security import HTTPBearer
+from fastapi import APIRouter, HTTPException, status
+from pydantic import BaseModel
 from supabase import create_client, Client
 
 
@@ -18,28 +18,108 @@ supabase: Client = create_client(
     SUPABASE_ANON_KEY
 )
 
-security = HTTPBearer()
+router = APIRouter(
+    prefix="/auth",
+    tags=["Authentication"]
+)
 
 
-async def get_current_user(
-    credentials=Depends(security)
-):
-    token = credentials.credentials
+class LoginRequest(BaseModel):
+    email: str
+    password: str
 
+
+class RegisterRequest(BaseModel):
+    name: str
+    email: str
+    password: str
+
+
+@router.post("/login")
+async def login(data: LoginRequest):
     try:
-        response = supabase.auth.get_user(token)
-        user = response.user
+        response = supabase.auth.sign_in_with_password({
+            "email": data.email,
+            "password": data.password
+        })
 
-        if not user:
+        if not response.session:
             raise HTTPException(
-                status_code=401,
-                detail="Could not validate credentials"
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid email or password."
             )
 
-        return user
+        return {
+            "access_token": response.session.access_token,
+            "token_type": "bearer",
+            "user": {
+                "id": response.user.id,
+                "email": response.user.email,
+                "name": (
+                    response.user.user_metadata or {}
+                ).get("name", data.email.split("@")[0])
+            }
+        }
 
-    except Exception:
+    except HTTPException:
+        raise
+
+    except Exception as error:
         raise HTTPException(
-            status_code=401,
-            detail="Could not validate credentials"
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=str(error)
         )
+
+
+@router.post("/register")
+async def register(data: RegisterRequest):
+    try:
+        response = supabase.auth.sign_up({
+            "email": data.email,
+            "password": data.password,
+            "options": {
+                "data": {
+                    "name": data.name,
+                    "role": "user"
+                }
+            }
+        })
+
+        if not response.user:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Registration failed."
+            )
+
+        return {
+            "message": "Registration successful.",
+            "user": {
+                "id": response.user.id,
+                "email": response.user.email,
+                "name": data.name
+            },
+            "session": (
+                {
+                    "access_token": response.session.access_token,
+                    "token_type": "bearer"
+                }
+                if response.session
+                else None
+            )
+        }
+
+    except HTTPException:
+        raise
+
+    except Exception as error:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(error)
+        )
+
+
+@router.post("/logout")
+async def logout():
+    return {
+        "message": "Logout successful."
+    }
