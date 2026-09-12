@@ -1,61 +1,114 @@
-from typing import Generator, Optional
-from fastapi import Depends, HTTPException, status, Request
-from fastapi.security import OAuth2PasswordBearer
+import os
+from typing import Optional
+
+from fastapi import Depends, HTTPException, Request, status
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
+from supabase import create_client, Client
 
 from app.database.session import get_db
-from app.core.security import decode_token
-from app.models.user import User, UserRole
+from app.models.user import User
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
+
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY")
+
+if not SUPABASE_URL or not SUPABASE_ANON_KEY:
+    raise RuntimeError(
+        "SUPABASE_URL and SUPABASE_ANON_KEY are required."
+    )
+
+supabase: Client = create_client(
+    SUPABASE_URL,
+    SUPABASE_ANON_KEY
+)
+
+security = HTTPBearer(auto_error=False)
+
 
 def get_client_ip(request: Request) -> Optional[str]:
-    forwarded = request.headers.get("X-Forwarded-For")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
-    return request.client.host if request.client else None
+    forwarded_for = request.headers.get("X-Forwarded-For")
 
-def get_current_user(
-    db: Session = Depends(get_db),
-    token: str = Depends(oauth2_scheme)
+    if forwarded_for:
+        return forwarded_for.split(",")[0].strip()
+
+    if request.client:
+        return request.client.host
+
+    return None
+
+
+async def get_current_user(
+    credentials: HTTPAuthorizationCredentials = Depends(
+        security
+    ),
+    db: Session = Depends(get_db)
 ) -> User:
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials. Please log in again.",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
-    
-    payload = decode_token(token)
-    if payload is None:
-        raise credentials_exception
-        
-    user_id: Optional[str] = payload.get("sub")
-    if user_id is None:
-        raise credentials_exception
-        
+
+    if credentials is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authorization token is missing.",
+            headers={
+                "WWW-Authenticate": "Bearer"
+            }
+        )
+
+    access_token = credentials.credentials
+
     try:
-        user_id_int = int(user_id)
-    except ValueError:
-        raise credentials_exception
-        
-    user = db.query(User).filter(User.id == user_id_int).first()
-    if user is None:
-        raise credentials_exception
-        
-    if not user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Inactive user account."
+        response = supabase.auth.get_user(
+            access_token
         )
-        
-    return user
 
-def get_current_admin_user(
-    current_user: User = Depends(get_current_user)
-) -> User:
-    if current_user.role != UserRole.ADMIN:
+        supabase_user = response.user
+
+        if not supabase_user:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Could not validate credentials."
+            )
+
+    except Exception:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Administrative privileges required to access this resource."
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Could not validate credentials. Please log in again.",
+            headers={
+                "WWW-Authenticate": "Bearer"
+            }
         )
-    return current_user
+
+    user_email = supabase_user.email
+    user_id = str(supabase_user.id)
+
+    if not user_email:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Supabase account email not found."
+        )
+
+    # Find the existing local DeepGuard user.
+    local_user = (
+        db.query(User)
+        .filter(User.email == user_email)
+        .first()
+    )
+
+    # Create a local user if it does not already exist.
+    if not local_user:
+        metadata = supabase_user.user_metadata or {}
+
+        local_user = User(
+            email=user_email,
+            name=(
+                metadata.get("name")
+                or user_email.split("@")[0]
+            ),
+            role=metadata.get("role", "user")
+        )
+
+        db.add(local_user)
+        db.commit()
+        db.refresh(local_user)
+
+    return local_user
