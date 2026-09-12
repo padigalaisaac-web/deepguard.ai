@@ -105,34 +105,56 @@ export const AnalyzePage: React.FC = () => {
     setIsAnalyzing(true);
     setCurrentStep(0);
 
-    try {
-      // Step 1: Upload
-      setCurrentStep(0);
-      const uploadRes = await analysisService.uploadMedia(selectedFile);
-      const analysisId = uploadRes.analysis_id;
+try {
+  // Step 1: Upload
+  setCurrentStep(0);
 
-      // Step 2 & 3: Progress simulation during real backend execution
-      const stepInterval = setInterval(() => {
-        setCurrentStep((prev) => (prev < 4 ? prev + 1 : prev));
-      }, 700);
+  const uploadRes = await analysisService.uploadMedia(selectedFile);
 
-      // Trigger analysis execution
-      const analysisDetail = await analysisService.runAnalysis(analysisId);
-      clearInterval(stepInterval);
-      setCurrentStep(4);
+  const analysisId =
+    uploadRes?.analysis_id ||
+    uploadRes?.id ||
+    uploadRes?.data?.analysis_id ||
+    uploadRes?.data?.id;
 
-      // Trigger confetti if authentic
-      if (analysisDetail.result === 'AUTHENTIC') {
-        confetti({ particleCount: 80, spread: 70, origin: { y: 0.6 } });
-      }
+  console.log('Upload response:', uploadRes);
+  console.log('Analysis ID:', analysisId);
 
-      setTimeout(() => {
-        navigate(`/analysis/${analysisId}`);
-      }, 600);
-    } catch (err: any) {
-      setError(err.message || 'We could not complete the analysis. Please try again.');
-      setIsAnalyzing(false);
-    }
+  if (!analysisId) {
+    throw new Error(
+      'Analysis ID was not returned after uploading the media file.'
+    );
+  }
+
+  // Step 2 & 3: Progress simulation
+  const stepInterval = setInterval(() => {
+    setCurrentStep((prev) => (prev < 4 ? prev + 1 : prev));
+  }, 700);
+
+  // Trigger analysis execution
+  const analysisDetail = await analysisService.runAnalysis(analysisId);
+
+  clearInterval(stepInterval);
+  setCurrentStep(4);
+
+  // Trigger confetti if authentic
+  if (analysisDetail.result === 'AUTHENTIC') {
+    confetti({
+      particleCount: 80,
+      spread: 70,
+      origin: { y: 0.6 },
+    });
+  }
+
+  setTimeout(() => {
+    navigate(`/analysis/${analysisId}`);
+  }, 600);
+} catch (err: any) {
+  setError(
+    err.message || 'We could not complete the analysis. Please try again.'
+  );
+  setIsAnalyzing(false);
+}
   };
 
   const config = formatConfigs[activeTab];
