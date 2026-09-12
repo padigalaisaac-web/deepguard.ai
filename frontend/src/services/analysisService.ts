@@ -4,15 +4,17 @@ import {
   AnalysisListResponse,
 } from '../types';
 
-type UploadResponse = {
+export type UploadResponse = {
   analysis_id: string;
   media_type: string;
   filename: string;
 };
 
 export const analysisService = {
-  // Upload image or video
-  uploadMedia: async (file: File): Promise<UploadResponse> => {
+  // Upload image, video, or audio
+  uploadMedia: async (
+    file: File
+  ): Promise<UploadResponse> => {
     const formData = new FormData();
     formData.append('file', file);
 
@@ -21,54 +23,86 @@ export const analysisService = {
       formData
     );
 
-    console.log('Upload API response:', response);
+    console.log(
+      'COMPLETE UPLOAD API RESPONSE:',
+      response
+    );
 
+    /*
+      Support common backend response formats:
+      {
+        analysis_id: "123"
+      }
+
+      {
+        id: "123"
+      }
+
+      {
+        data: {
+          analysis_id: "123"
+        }
+      }
+    */
     const analysisId =
-      response?.analysis_id ||
-      response?.id ||
-      response?.data?.analysis_id ||
-      response?.data?.id;
+      response?.analysis_id ??
+      response?.id ??
+      response?.data?.analysis_id ??
+      response?.data?.id ??
+      response?.analysis?.id;
 
     if (!analysisId) {
       throw new Error(
-        'Upload succeeded, but the backend did not return an analysis ID.'
+        'The backend did not return an analysis ID. The upload endpoint must create an analysis record and return its ID.'
       );
     }
 
     return {
-      analysis_id: analysisId,
+      analysis_id: String(analysisId),
 
       media_type:
-        response?.media_type ||
-        response?.data?.media_type ||
+        response?.media_type ??
+        response?.data?.media_type ??
         file.type,
 
       filename:
-        response?.filename ||
-        response?.data?.filename ||
+        response?.filename ??
+        response?.data?.filename ??
         file.name,
     };
   },
 
-  // Run analysis
+  // Run forensic analysis
   runAnalysis: async (
     analysisId: string
   ): Promise<AnalysisDetail> => {
+    if (!analysisId) {
+      throw new Error(
+        'Cannot run analysis because the analysis ID is missing.'
+      );
+    }
+
     return api.post<AnalysisDetail>(
       `/analysis/${analysisId}/run`
     );
   },
 
-  // Get one analysis result
+  // Get one analysis
   getAnalysis: async (
     analysisId: string
   ): Promise<AnalysisDetail> => {
+    if (!analysisId) {
+      throw new Error(
+        'Cannot load analysis because the analysis ID is missing.'
+      );
+    }
+
     return api.get<AnalysisDetail>(
       `/analysis/${analysisId}`
     );
   },
 
-  // Get analysis history
+  // List analysis history
   listAnalyses: async (
     params: {
       media_type?: string;
@@ -112,14 +146,14 @@ export const analysisService = {
     if (params.page) {
       query.append(
         'page',
-        params.page.toString()
+        String(params.page)
       );
     }
 
     if (params.page_size) {
       query.append(
         'page_size',
-        params.page_size.toString()
+        String(params.page_size)
       );
     }
 
@@ -141,7 +175,9 @@ export const analysisService = {
 
     return api.get<AnalysisListResponse>(
       `/analysis${
-        queryString ? `?${queryString}` : ''
+        queryString
+          ? `?${queryString}`
+          : ''
       }`
     );
   },
@@ -155,7 +191,7 @@ export const analysisService = {
     );
   },
 
-  // Download analysis report
+  // Download PDF report
   downloadReport: async (
     analysisId: string,
     filename: string
@@ -180,11 +216,9 @@ export const analysisService = {
       )}.pdf`;
 
     document.body.appendChild(link);
-
     link.click();
 
     window.URL.revokeObjectURL(url);
-
     document.body.removeChild(link);
   },
 };
