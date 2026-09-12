@@ -18,3 +18,4 @@ aiofiles>=23.2.1
 opencv-python-headless>=4.9.0.80
 onnxruntime>=1.18.0
 huggingface-hub>=0.24.0
+supabase
