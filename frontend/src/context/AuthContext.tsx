@@ -17,8 +17,17 @@ type User = {
   created_at: string;
 };
 
+type ProfileUpdates = {
+  name?: string;
+  role?: string;
+  password?: string;
+};
+
 type AuthContextType = {
   user: User | null;
+  isAuthenticated: boolean;
+  isAdmin: boolean;
+  isLoading: boolean;
   loading: boolean;
   register: (
     name: string,
@@ -31,10 +40,9 @@ type AuthContextType = {
   ) => Promise<void>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
-  updateProfile: (updates: {
-    name?: string;
-    role?: string;
-  }) => Promise<void>;
+  updateProfile: (
+    updates: ProfileUpdates
+  ) => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(
@@ -52,7 +60,7 @@ function formatUser(supabaseUser: any): User | null {
       supabaseUser.email?.split('@')[0] ||
       'User',
     role: supabaseUser.user_metadata?.role || 'user',
-    created_at: supabaseUser.created_at,
+    created_at: supabaseUser.created_at || '',
   };
 }
 
@@ -62,7 +70,7 @@ export function AuthProvider({
   children: ReactNode;
 }) {
   const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(true);
 
   const refreshUser = async () => {
     const currentUser = await authService.getCurrentUser();
@@ -71,7 +79,7 @@ export function AuthProvider({
 
   useEffect(() => {
     refreshUser().finally(() => {
-      setLoading(false);
+      setIsLoading(false);
     });
 
     const {
@@ -79,7 +87,7 @@ export function AuthProvider({
     } = supabase.auth.onAuthStateChange(
       (_event, session) => {
         setUser(formatUser(session?.user));
-        setLoading(false);
+        setIsLoading(false);
       }
     );
 
@@ -113,19 +121,24 @@ export function AuthProvider({
     setUser(null);
   }
 
-  async function updateProfile(updates: {
-    name?: string;
-    role?: string;
-  }) {
-    const updatedUser = await authService.updateProfile(updates);
+  async function updateProfile(updates: ProfileUpdates) {
+    const updatedUser =
+      await authService.updateProfile(updates);
+
     setUser(formatUser(updatedUser));
   }
+
+  const isAuthenticated = !!user;
+  const isAdmin = user?.role === 'admin';
 
   return (
     <AuthContext.Provider
       value={{
         user,
-        loading,
+        isAuthenticated,
+        isAdmin,
+        isLoading,
+        loading: isLoading,
         register,
         login,
         logout,
