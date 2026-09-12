@@ -96,7 +96,7 @@ async def upload_media(
     ip = get_client_ip(request) if request else None
     analysis = await AnalysisService.save_uploaded_file(file, current_user, db, ip_address=ip)
     return AnalysisUploadResponse(
-        analysis_id=analysis.id,
+        analysis_id=str(analysis.id),
         filename=analysis.filename,
         original_filename=analysis.original_filename,
         media_type=analysis.media_type,
