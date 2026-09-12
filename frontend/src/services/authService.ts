@@ -12,13 +12,12 @@ export const authService = {
       options: {
         data: {
           name,
+          role: 'user',
         },
       },
     });
 
-    if (error) {
-      throw new Error(error.message);
-    }
+    if (error) throw new Error(error.message);
 
     return {
       user: data.user,
@@ -33,9 +32,7 @@ export const authService = {
         password,
       });
 
-    if (error) {
-      throw new Error(error.message);
-    }
+    if (error) throw new Error(error.message);
 
     return {
       user: data.user,
@@ -46,29 +43,27 @@ export const authService = {
   async logout() {
     const { error } = await supabase.auth.signOut();
 
-    if (error) {
-      throw new Error(error.message);
-    }
+    if (error) throw new Error(error.message);
   },
 
   async getCurrentUser() {
     const {
       data: { user },
-      error,
     } = await supabase.auth.getUser();
-
-    if (error) {
-      return null;
-    }
 
     return user;
   },
 
-  async getSession() {
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
+  async updateProfile(updates: {
+    name?: string;
+    role?: string;
+  }) {
+    const { data, error } = await supabase.auth.updateUser({
+      data: updates,
+    });
 
-    return session;
+    if (error) throw new Error(error.message);
+
+    return data.user;
   },
 };
