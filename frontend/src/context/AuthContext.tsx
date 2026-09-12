@@ -11,10 +11,10 @@ import { authService } from '../services/authService';
 
 type User = {
   id: string;
-  email?: string;
-  user_metadata?: {
-    name?: string;
-  };
+  email: string;
+  name: string;
+  role: string;
+  created_at: string;
 };
 
 type AuthContextType = {
@@ -30,11 +30,31 @@ type AuthContextType = {
     password: string
   ) => Promise<void>;
   logout: () => Promise<void>;
+  refreshUser: () => Promise<void>;
+  updateProfile: (updates: {
+    name?: string;
+    role?: string;
+  }) => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(
   undefined
 );
+
+function formatUser(supabaseUser: any): User | null {
+  if (!supabaseUser) return null;
+
+  return {
+    id: supabaseUser.id,
+    email: supabaseUser.email || '',
+    name:
+      supabaseUser.user_metadata?.name ||
+      supabaseUser.email?.split('@')[0] ||
+      'User',
+    role: supabaseUser.user_metadata?.role || 'user',
+    created_at: supabaseUser.created_at,
+  };
+}
 
 export function AuthProvider({
   children,
@@ -44,9 +64,13 @@ export function AuthProvider({
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const refreshUser = async () => {
+    const currentUser = await authService.getCurrentUser();
+    setUser(formatUser(currentUser));
+  };
+
   useEffect(() => {
-    authService.getCurrentUser().then((currentUser) => {
-      setUser(currentUser as User | null);
+    refreshUser().finally(() => {
       setLoading(false);
     });
 
@@ -54,7 +78,7 @@ export function AuthProvider({
       data: { subscription },
     } = supabase.auth.onAuthStateChange(
       (_event, session) => {
-        setUser((session?.user as User) || null);
+        setUser(formatUser(session?.user));
         setLoading(false);
       }
     );
@@ -75,18 +99,26 @@ export function AuthProvider({
       password
     );
 
-    setUser(result.user as User | null);
+    setUser(formatUser(result.user));
   }
 
   async function login(email: string, password: string) {
     const result = await authService.login(email, password);
 
-    setUser(result.user as User | null);
+    setUser(formatUser(result.user));
   }
 
   async function logout() {
     await authService.logout();
     setUser(null);
+  }
+
+  async function updateProfile(updates: {
+    name?: string;
+    role?: string;
+  }) {
+    const updatedUser = await authService.updateProfile(updates);
+    setUser(formatUser(updatedUser));
   }
 
   return (
@@ -97,6 +129,8 @@ export function AuthProvider({
         register,
         login,
         logout,
+        refreshUser,
+        updateProfile,
       }}
     >
       {children}
