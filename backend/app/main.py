@@ -1,5 +1,5 @@
-import os
 from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -9,34 +9,52 @@ from app.core.config import settings
 from app.database.session import init_db
 from app.api import api_router
 
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Initialize DB tables and seed default admin/demo accounts
+    """
+    Initialize the database when the application starts.
+    """
     init_db()
     yield
 
+
 app = FastAPI(
     title=settings.APP_TITLE,
-    description="Enterprise-grade AI deepfake detection web service for images, videos, and audio.",
+    description=(
+        "Enterprise-grade AI deepfake detection web service "
+        "for images, videos, and audio."
+    ),
     version="1.0.0",
-    lifespan=lifespan
+    lifespan=lifespan,
 )
 
-# Set up CORS
+
+# CORS configuration
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allow all for development & local frontends
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Include main API router
-app.include_router(api_router, prefix=settings.API_V1_STR)
 
-# Mount static uploads directory for heatmap preview and media streaming
+# Register API routes
+app.include_router(
+    api_router,
+    prefix=settings.API_V1_STR,
+)
+
+
+# Serve uploaded media and heatmaps
 if settings.UPLOAD_DIR.exists():
-    app.mount("/uploads", StaticFiles(directory=str(settings.UPLOAD_DIR)), name="uploads")
+    app.mount(
+        "/uploads",
+        StaticFiles(directory=str(settings.UPLOAD_DIR)),
+        name="uploads",
+    )
+
 
 @app.get("/")
 def root():
@@ -46,24 +64,41 @@ def root():
         "tagline": "Detect. Verify. Trust.",
         "version": "1.0.0",
         "status": "online",
-        "docs_url": "/docs"
+        "docs_url": "/docs",
     }
+
 
 @app.get("/health")
 def health_check():
     return {
         "status": "healthy",
-        "mode": "prototype" if settings.DEMO_MODE else "production"
+        "mode": (
+            "prototype"
+            if settings.DEMO_MODE
+            else "production"
+        ),
     }
 
+
 @app.exception_handler(Exception)
-async def global_exception_handler(request: Request, exc: Exception):
-    # In production/enterprise APIs, log on server and return user-friendly error
+async def global_exception_handler(
+    request: Request,
+    exc: Exception,
+):
     return JSONResponse(
         status_code=500,
-        content={"detail": f"An unexpected server error occurred: {str(exc)}"}
+        content={
+            "detail": "An unexpected server error occurred."
+        },
     )
+
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True)
+
+    uvicorn.run(
+        "app.main:app",
+        host="0.0.0.0",
+        port=8000,
+        reload=True,
+    )
