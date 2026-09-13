@@ -3,10 +3,8 @@ import { supabase } from '../lib/supabase';
 const rawApiUrl = import.meta.env.VITE_API_URL || '';
 
 const API_BASE_URL = rawApiUrl
-  ? rawApiUrl.endsWith('/api')
-    ? rawApiUrl
-    : `${rawApiUrl}/api`
-  : '/api';
+  ? rawApiUrl.replace(/\/+$/, '')
+  : '';
 
 export class ApiError extends Error {
   status: number;
@@ -28,6 +26,7 @@ async function request<T>(
   endpoint: string,
   options: RequestInit = {}
 ): Promise<T> {
+
   const headers = new Headers(
     options.headers || {}
   );
@@ -53,12 +52,7 @@ async function request<T>(
     );
   }
 
-  const url =
-    `${API_BASE_URL}${
-      endpoint.startsWith('/')
-        ? endpoint
-        : `/${endpoint}`
-    }`;
+  const url = `${API_BASE_URL}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
 
   try {
     const response = await fetch(url, {
@@ -73,10 +67,8 @@ async function request<T>(
     }
 
     if (!response.ok) {
-      let errorDetail =
-        'An unexpected error occurred';
-
-      let errorData: any = null;
+      let errorDetail = 'An unexpected error occurred';
+      let errorData = null;
 
       try {
         errorData = await response.json();
@@ -85,6 +77,7 @@ async function request<T>(
           errorData.detail ||
           errorData.message ||
           errorDetail;
+
       } catch {
         errorDetail =
           response.statusText ||
@@ -122,6 +115,7 @@ async function request<T>(
         response.status
       );
     }
+
   } catch (error: any) {
     if (error instanceof ApiError) {
       throw error;
@@ -153,6 +147,7 @@ export const api = {
     body?: any,
     options?: RequestInit
   ) => {
+
     const isFormData =
       body instanceof FormData;
 
