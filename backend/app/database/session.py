@@ -1,64 +1,58 @@
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, Session
+from sqlalchemy.orm import sessionmaker
+
 from app.core.config import settings
 from app.database.base import Base
-import app.models  # Ensure all models are registered
 
-# Connect args for SQLite to allow multi-threading in FastAPI
+# Import models so SQLAlchemy registers all tables
+import app.models  # noqa: F401
+
+
+DATABASE_URL = settings.DATABASE_URL
+
 connect_args = {}
-if settings.DATABASE_URL.startswith("sqlite"):
-    connect_args = {"check_same_thread": False}
+
+# SQLite configuration
+if DATABASE_URL.startswith("sqlite"):
+    connect_args = {
+        "check_same_thread": False
+    }
+
+# PostgreSQL/Supabase configuration
+elif DATABASE_URL.startswith("postgresql"):
+    connect_args = {
+        "sslmode": "require"
+    }
 
 engine = create_engine(
-    settings.DATABASE_URL,
+    DATABASE_URL,
     connect_args=connect_args,
-    echo=False
+    echo=False,
+    pool_pre_ping=True
 )
 
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+SessionLocal = sessionmaker(
+    autocommit=False,
+    autoflush=False,
+    bind=engine
+)
+
 
 def get_db():
+    """
+    Provide a database session for FastAPI requests.
+    """
     db = SessionLocal()
+
     try:
         yield db
     finally:
         db.close()
 
+
 def init_db():
+    """
+    Create database tables when the application starts.
+    """
     Base.metadata.create_all(bind=engine)
-    # Seed initial users and sample data if empty
-    db = SessionLocal()
-    try:
-        from app.models.user import User, UserRole
-        from app.core.security import get_password_hash
-        
-        # Check if admin exists
-        admin = db.query(User).filter(User.email == "admin@deepguard.ai").first()
-        if not admin:
-            admin_user = User(
-                name="DeepGuard Administrator",
-                email="admin@deepguard.ai",
-                password_hash=get_password_hash("Admin@123456"),
-                role=UserRole.ADMIN,
-                is_active=True
-            )
-            db.add(admin_user)
-            
-        # Check if demo user exists
-        demo = db.query(User).filter(User.email == "user@deepguard.ai").first()
-        if not demo:
-            demo_user = User(
-                name="Dr. Alex Vance",
-                email="user@deepguard.ai",
-                password_hash=get_password_hash("User@123456"),
-                role=UserRole.USER,
-                is_active=True
-            )
-            db.add(demo_user)
-            
-        db.commit()
-    except Exception as e:
-        db.rollback()
-        print(f"Error initializing/seeding database: {e}")
-    finally:
-        db.close()
+    print("Database tables initialized successfully.")
