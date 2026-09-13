@@ -109,7 +109,7 @@ async def get_current_user(
                 or user_email.split("@")[0]
             ),
             role="user",
-            password_hash=None,
+            password_hash="SUPABASE_AUTH_USER",
         )
 
         db.add(local_user)
