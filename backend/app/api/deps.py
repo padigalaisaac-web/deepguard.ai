@@ -125,3 +125,19 @@ async def get_current_user(
         db.refresh(local_user)
 
     return local_user
+
+
+async def get_current_admin_user(
+    current_user: User = Depends(get_current_user),
+) -> User:
+    """
+    Allow only admin users to access admin endpoints.
+    """
+
+    if str(current_user.role).lower() not in ["admin", "userrole.admin"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin access required.",
+        )
+
+    return current_user
