@@ -1,8 +1,6 @@
 import { supabase } from '../lib/supabase';
 
-const rawApiUrl = (
-  import.meta.env.VITE_API_URL || ''
-).trim().replace(/\/+$/, '');
+const rawApiUrl = import.meta.env.VITE_API_URL || '';
 
 const API_BASE_URL = rawApiUrl
   ? rawApiUrl.endsWith('/api')
@@ -12,13 +10,9 @@ const API_BASE_URL = rawApiUrl
 
 export class ApiError extends Error {
   status: number;
-  data: any;
+  data: unknown;
 
-  constructor(
-    message: string,
-    status: number,
-    data?: any
-  ) {
+  constructor(message: string, status: number, data?: unknown) {
     super(message);
     this.name = 'ApiError';
     this.status = status;
@@ -26,58 +20,37 @@ export class ApiError extends Error {
   }
 }
 
-async function getAccessToken(): Promise<string | null> {
-  try {
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-
-    return session?.access_token || null;
-  } catch {
-    return localStorage.getItem(
-      'deepguard_token'
-    );
-  }
-}
-
 async function request<T>(
   endpoint: string,
   options: RequestInit = {}
 ): Promise<T> {
-  const headers = new Headers(
-    options.headers || {}
-  );
+  const headers = new Headers(options.headers || {});
 
-  const token = await getAccessToken();
+  /*
+   * Get the current Supabase login session.
+   * Do not use localStorage deepguard_token here.
+   */
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
 
-  if (
-    token &&
-    !headers.has('Authorization')
-  ) {
+  if (session?.access_token) {
     headers.set(
       'Authorization',
-      `Bearer ${token}`
+      `Bearer ${session.access_token}`
     );
   }
-
-  const isFormData =
-    options.body instanceof FormData;
 
   if (
-    !isFormData &&
+    !(options.body instanceof FormData) &&
     !headers.has('Content-Type')
   ) {
-    headers.set(
-      'Content-Type',
-      'application/json'
-    );
+    headers.set('Content-Type', 'application/json');
   }
 
-  const cleanEndpoint = endpoint.startsWith('/')
-    ? endpoint
-    : `/${endpoint}`;
-
-  const url = `${API_BASE_URL}${cleanEndpoint}`;
+  const url = `${API_BASE_URL}${
+    endpoint.startsWith('/') ? endpoint : `/${endpoint}`
+  }`;
 
   try {
     const response = await fetch(url, {
@@ -85,91 +58,70 @@ async function request<T>(
       headers,
     });
 
-    if (
-      response.status === 401 &&
-      !endpoint.includes('/auth/login')
-    ) {
-      localStorage.removeItem(
-        'deepguard_token'
-      );
+    if (response.status === 401) {
+      await supabase.auth.signOut();
 
-      localStorage.removeItem(
-        'deepguard_user'
-      );
+      localStorage.removeItem('deepguard_token');
+      localStorage.removeItem('deepguard_user');
 
-      window.dispatchEvent(
-        new Event('auth:unauthorized')
-      );
+      window.dispatchEvent(new Event('auth:unauthorized'));
     }
 
     if (!response.ok) {
-      let errorData: any = null;
-      let errorMessage =
-        'An unexpected error occurred.';
+      let errorDetail = 'An unexpected error occurred';
+      let errorData: unknown = null;
 
       try {
-        const responseText =
-          await response.text();
+        errorData = await response.json();
 
-        if (responseText.trim()) {
-          try {
-            errorData =
-              JSON.parse(responseText);
+        if (
+          typeof errorData === 'object' &&
+          errorData !== null
+        ) {
+          const data = errorData as {
+            detail?: string;
+            message?: string;
+          };
 
-            errorMessage =
-              errorData?.detail ||
-              errorData?.message ||
-              errorMessage;
-          } catch {
-            errorMessage =
-              responseText;
-          }
+          errorDetail =
+            data.detail ||
+            data.message ||
+            errorDetail;
         }
       } catch {
-        errorMessage =
-          response.statusText ||
-          errorMessage;
+        errorDetail =
+          response.statusText || errorDetail;
       }
 
       throw new ApiError(
-        errorMessage,
+        errorDetail,
         response.status,
         errorData
       );
     }
 
     const contentType =
-      response.headers.get(
-        'content-type'
-      ) || '';
+      response.headers.get('content-type') || '';
 
     if (
-      contentType.includes(
-        'application/pdf'
-      ) ||
-      contentType.includes(
-        'application/octet-stream'
-      )
+      contentType.includes('application/pdf') ||
+      contentType.includes('application/octet-stream')
     ) {
-      return (await response.blob()) as T;
+      return (await response.blob()) as unknown as T;
     }
 
-    const responseText =
-      await response.text();
+    const text = await response.text();
 
-    if (!responseText.trim()) {
+    if (!text.trim()) {
       return {} as T;
     }
 
     try {
-      return JSON.parse(
-        responseText
-      ) as T;
+      return JSON.parse(text) as T;
     } catch {
       throw new ApiError(
         `Server returned invalid JSON. Status: ${response.status}`,
-        response.status,
-        responseText
+        response.status
       );
     }
   } catch (error: unknown) {
@@ -180,10 +132,10 @@ async function request<T>(
     const message =
       error instanceof Error
         ? error.message
-        : 'Network connection error.';
+        : 'Network connection error';
 
     throw new ApiError(
-      `${message} Detection service may be offline.`,
+      `${message}. Detection service may be offline.`,
       0
     );
   }
@@ -193,20 +145,18 @@ export const api = {
   get: <T>(
     endpoint: string,
     options?: RequestInit
-  ): Promise<T> => {
-    return request<T>(endpoint, {
+  ) =>
+    request<T>(endpoint, {
       ...options,
       method: 'GET',
-    });
-  },
+    }),
 
   post: <T>(
     endpoint: string,
-    body?: any,
+    body?: unknown,
     options?: RequestInit
-  ): Promise<T> => {
-    const isFormData =
-      body instanceof FormData;
+  ) => {
+    const isFormData = body instanceof FormData;
 
     return request<T>(endpoint, {
       ...options,
@@ -221,26 +171,24 @@ export const api = {
 
   patch: <T>(
     endpoint: string,
-    body?: any,
+    body?: unknown,
     options?: RequestInit
-  ): Promise<T> => {
-    return request<T>(endpoint, {
+  ) =>
+    request<T>(endpoint, {
       ...options,
       method: 'PATCH',
       body:
         body !== undefined
           ? JSON.stringify(body)
           : undefined,
-    });
-  },
+    }),
 
   delete: <T>(
     endpoint: string,
     options?: RequestInit
-  ): Promise<T> => {
-    return request<T>(endpoint, {
+  ) =>
+    request<T>(endpoint, {
       ...options,
       method: 'DELETE',
-    });
-  },
+    }),
 };
