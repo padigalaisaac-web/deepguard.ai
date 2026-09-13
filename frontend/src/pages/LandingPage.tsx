@@ -12,7 +12,17 @@ export default function LandingPage() {
         <div className="nav-links">
           <a href="#features">Features</a>
           <a href="#how-it-works">How It Works</a>
-        const { isAuthenticated } = useAuth();
+       {!isAuthenticated && (
+  <>
+    <Link to="/login">
+      Login
+    </Link>
+
+    <Link to="/register">
+      Get Started
+    </Link>
+  </>
+)}
         </div>
       </nav>
 
