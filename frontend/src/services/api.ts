@@ -1,55 +1,65 @@
 import { supabase } from '../lib/supabase';
 
-const rawApiUrl = import.meta.env.VITE_API_URL || '';
+const rawApiUrl = import.meta.env.VITE_API_URL || "";
 
 const API_BASE_URL = rawApiUrl
-  ? rawApiUrl.endsWith('/api')
+  ? rawApiUrl.endsWith("/api")
     ? rawApiUrl
     : `${rawApiUrl}/api`
-  : '/api';
+  : "/api";
+
 
 export class ApiError extends Error {
   status: number;
-  data: unknown;
+  data: any;
 
-  constructor(message: string, status: number, data?: unknown) {
+  constructor(
+    message: string,
+    status: number,
+    data?: any
+  ) {
     super(message);
-    this.name = 'ApiError';
+    this.name = "ApiError";
     this.status = status;
     this.data = data;
   }
 }
 
+
 async function request<T>(
   endpoint: string,
   options: RequestInit = {}
 ): Promise<T> {
-  const headers = new Headers(options.headers || {});
+  const token = localStorage.getItem("deepguard_token");
 
-  /*
-   * Get the current Supabase login session.
-   * Do not use localStorage deepguard_token here.
-   */
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
+  const headers = new Headers(
+    options.headers || {}
+  );
 
-  if (session?.access_token) {
+  if (
+    token &&
+    !headers.has("Authorization")
+  ) {
     headers.set(
-      'Authorization',
-      `Bearer ${session.access_token}`
+      "Authorization",
+      `Bearer ${token}`
     );
   }
 
   if (
     !(options.body instanceof FormData) &&
-    !headers.has('Content-Type')
+    !headers.has("Content-Type")
   ) {
-    headers.set('Content-Type', 'application/json');
+    headers.set(
+      "Content-Type",
+      "application/json"
+    );
   }
 
   const url = `${API_BASE_URL}${
-    endpoint.startsWith('/') ? endpoint : `/${endpoint}`
+    endpoint.startsWith("/")
+      ? endpoint
+      : `/${endpoint}`
   }`;
 
   try {
@@ -58,39 +68,41 @@ async function request<T>(
       headers,
     });
 
-    if (response.status === 401) {
-      await supabase.auth.signOut();
+    if (
+      response.status === 401 &&
+      !endpoint.includes("/auth/login") &&
+      !endpoint.includes("/auth/register")
+    ) {
+      localStorage.removeItem(
+        "deepguard_token"
+      );
 
-      localStorage.removeItem('deepguard_token');
-      localStorage.removeItem('deepguard_user');
+      localStorage.removeItem(
+        "deepguard_user"
+      );
 
-      window.dispatchEvent(new Event('auth:unauthorized'));
+      window.dispatchEvent(
+        new Event("auth:unauthorized")
+      );
     }
 
     if (!response.ok) {
-      let errorDetail = 'An unexpected error occurred';
-      let errorData: unknown = null;
+      let errorDetail =
+        "An unexpected error occurred";
+
+      let errorData: any = null;
 
       try {
         errorData = await response.json();
 
-        if (
-          typeof errorData === 'object' &&
-          errorData !== null
-        ) {
-          const data = errorData as {
-            detail?: string;
-            message?: string;
-          };
-
-          errorDetail =
-            data.detail ||
-            data.message ||
-            errorDetail;
-        }
+        errorDetail =
+          errorData.detail ||
+          errorData.message ||
+          errorDetail;
       } catch {
         errorDetail =
-          response.statusText || errorDetail;
+          response.statusText ||
+          errorDetail;
       }
 
       throw new ApiError(
@@ -101,11 +113,10 @@ async function request<T>(
     }
 
     const contentType =
-      response.headers.get('content-type') || '';
+      response.headers.get("content-type") || "";
 
     if (
-      contentType.includes('application/pdf') ||
-      contentType.includes('application/octet-stream')
+      contentType.includes("application/pdf")
     ) {
       return (await response.blob()) as unknown as T;
     }
@@ -124,71 +135,80 @@ async function request<T>(
         response.status
       );
     }
-  } catch (error: unknown) {
+  } catch (error: any) {
     if (error instanceof ApiError) {
       throw error;
     }
 
-    const message =
-      error instanceof Error
-        ? error.message
-        : 'Network connection error';
-
     throw new ApiError(
-      `${message}. Detection service may be offline.`,
+      error.message ||
+        "Network connection error. Detection service may be offline.",
       0
     );
   }
 }
+
 
 export const api = {
   get: <T>(
     endpoint: string,
     options?: RequestInit
   ) =>
-    request<T>(endpoint, {
-      ...options,
-      method: 'GET',
-    }),
+    request<T>(
+      endpoint,
+      {
+        ...options,
+        method: "GET",
+      }
+    ),
 
   post: <T>(
     endpoint: string,
-    body?: unknown,
+    body?: any,
     options?: RequestInit
   ) => {
-    const isFormData = body instanceof FormData;
+    const isFormData =
+      body instanceof FormData;
 
-    return request<T>(endpoint, {
-      ...options,
-      method: 'POST',
-      body: isFormData
-        ? body
-        : body !== undefined
-        ? JSON.stringify(body)
-        : undefined,
-    });
+    return request<T>(
+      endpoint,
+      {
+        ...options,
+        method: "POST",
+        body: isFormData
+          ? body
+          : body
+          ? JSON.stringify(body)
+          : undefined,
+      }
+    );
   },
 
   patch: <T>(
     endpoint: string,
-    body?: unknown,
+    body?: any,
     options?: RequestInit
   ) =>
-    request<T>(endpoint, {
-      ...options,
-      method: 'PATCH',
-      body:
-        body !== undefined
+    request<T>(
+      endpoint,
+      {
+        ...options,
+        method: "PATCH",
+        body: body
           ? JSON.stringify(body)
           : undefined,
-    }),
+      }
+    ),
 
   delete: <T>(
     endpoint: string,
     options?: RequestInit
   ) =>
-    request<T>(endpoint, {
-      ...options,
-      method: 'DELETE',
-    }),
+    request<T>(
+      endpoint,
+      {
+        ...options,
+        method: "DELETE",
+      }
+    ),
 };
