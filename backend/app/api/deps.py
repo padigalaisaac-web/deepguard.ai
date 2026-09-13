@@ -1,7 +1,11 @@
+import os
 from typing import Optional
 
 from fastapi import Depends, HTTPException, Request, status
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi.security import (
+    HTTPBearer,
+    HTTPAuthorizationCredentials,
+)
 from sqlalchemy.orm import Session
 from supabase import create_client, Client
 
@@ -9,29 +13,31 @@ from app.database.session import get_db
 from app.models.user import User
 
 
-SUPABASE_URL = None
-SUPABASE_ANON_KEY = None
-
-import os
-
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY")
+
 
 if not SUPABASE_URL or not SUPABASE_ANON_KEY:
     raise RuntimeError(
         "SUPABASE_URL and SUPABASE_ANON_KEY are required."
     )
 
+
 supabase: Client = create_client(
     SUPABASE_URL,
     SUPABASE_ANON_KEY,
 )
 
+
 security = HTTPBearer(auto_error=False)
 
 
-def get_client_ip(request: Request) -> Optional[str]:
-    forwarded_for = request.headers.get("X-Forwarded-For")
+def get_client_ip(
+    request: Request,
+) -> Optional[str]:
+    forwarded_for = request.headers.get(
+        "X-Forwarded-For"
+    )
 
     if forwarded_for:
         return forwarded_for.split(",")[0].strip()
@@ -61,15 +67,19 @@ async def get_current_user(
     access_token = credentials.credentials
 
     try:
-        response = supabase.auth.get_user(access_token)
+        response = supabase.auth.get_user(
+            access_token
+        )
+
         supabase_user = response.user
 
-    except Exception as error:
-        print(f"Supabase token validation failed: {error}")
-
+    except Exception:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Could not validate credentials. Please log in again.",
+            detail=(
+                "Could not validate credentials. "
+                "Please log in again."
+            ),
             headers={
                 "WWW-Authenticate": "Bearer"
             },
@@ -79,9 +89,6 @@ async def get_current_user(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid Supabase user.",
-            headers={
-                "WWW-Authenticate": "Bearer"
-            },
         )
 
     user_email = supabase_user.email
@@ -100,7 +107,9 @@ async def get_current_user(
     )
 
     if not local_user:
-        metadata = supabase_user.user_metadata or {}
+        metadata = (
+            supabase_user.user_metadata or {}
+        )
 
         local_user = User(
             name=(
@@ -109,18 +118,10 @@ async def get_current_user(
             ),
             email=user_email,
             role=metadata.get("role", "user"),
-            is_active=True,
         )
 
         db.add(local_user)
         db.commit()
         db.refresh(local_user)
-
-    if hasattr(local_user, "is_active"):
-        if not local_user.is_active:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="User account is inactive.",
-            )
 
     return local_user
