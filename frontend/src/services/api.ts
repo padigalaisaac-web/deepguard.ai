@@ -52,7 +52,13 @@ async function request<T>(
     );
   }
 
-  const url = `${API_BASE_URL}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
+  const cleanEndpoint = endpoint.startsWith('/')
+    ? endpoint
+    : `/${endpoint}`;
+
+  const url = `${API_BASE_URL}${cleanEndpoint}`;
+
+  console.log('API Request:', url);
 
   try {
     const response = await fetch(url, {
@@ -67,7 +73,9 @@ async function request<T>(
     }
 
     if (!response.ok) {
-      let errorDetail = 'An unexpected error occurred';
+      let errorDetail =
+        'An unexpected error occurred';
+
       let errorData = null;
 
       try {
@@ -111,12 +119,13 @@ async function request<T>(
       return JSON.parse(text) as T;
     } catch {
       throw new ApiError(
-        `Server returned invalid JSON. Status: ${response.status}`,
+        'Server returned invalid JSON.',
         response.status
       );
     }
 
   } catch (error: any) {
+
     if (error instanceof ApiError) {
       throw error;
     }
@@ -130,6 +139,7 @@ async function request<T>(
 }
 
 export const api = {
+
   get: <T>(
     endpoint: string,
     options?: RequestInit
