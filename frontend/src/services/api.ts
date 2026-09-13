@@ -1,4 +1,4 @@
-import { supabase } from '../lib/supabase';
+import { supabase } from "../lib/supabase";
 
 const rawApiUrl = import.meta.env.VITE_API_URL || "";
 
@@ -8,16 +8,11 @@ const API_BASE_URL = rawApiUrl
     : `${rawApiUrl}/api`
   : "/api";
 
-
 export class ApiError extends Error {
   status: number;
   data: any;
 
-  constructor(
-    message: string,
-    status: number,
-    data?: any
-  ) {
+  constructor(message: string, status: number, data?: any) {
     super(message);
     this.name = "ApiError";
     this.status = status;
@@ -25,41 +20,35 @@ export class ApiError extends Error {
   }
 }
 
-
 async function request<T>(
   endpoint: string,
   options: RequestInit = {}
 ): Promise<T> {
-  const token = localStorage.getItem("deepguard_token");
+  const headers = new Headers(options.headers || {});
 
-  const headers = new Headers(
-    options.headers || {}
-  );
+  // Get the current Supabase session
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
 
-  if (
-    token &&
-    !headers.has("Authorization")
-  ) {
+  // Add Supabase access token
+  if (session?.access_token && !headers.has("Authorization")) {
     headers.set(
       "Authorization",
-      `Bearer ${token}`
+      `Bearer ${session.access_token}`
     );
   }
 
+  // Do not add JSON content type to FormData
   if (
     !(options.body instanceof FormData) &&
     !headers.has("Content-Type")
   ) {
-    headers.set(
-      "Content-Type",
-      "application/json"
-    );
+    headers.set("Content-Type", "application/json");
   }
 
   const url = `${API_BASE_URL}${
-    endpoint.startsWith("/")
-      ? endpoint
-      : `/${endpoint}`
+    endpoint.startsWith("/") ? endpoint : `/${endpoint}`
   }`;
 
   try {
@@ -68,45 +57,24 @@ async function request<T>(
       headers,
     });
 
-    if (
-      response.status === 401 &&
-      !endpoint.includes("/auth/login") &&
-      !endpoint.includes("/auth/register")
-    ) {
-      localStorage.removeItem(
-        "deepguard_token"
-      );
-
-      localStorage.removeItem(
-        "deepguard_user"
-      );
-
-      window.dispatchEvent(
-        new Event("auth:unauthorized")
-      );
-    }
-
     if (!response.ok) {
-      let errorDetail =
-        "An unexpected error occurred";
-
       let errorData: any = null;
+      let errorMessage = "An unexpected error occurred.";
 
       try {
         errorData = await response.json();
 
-        errorDetail =
-          errorData.detail ||
-          errorData.message ||
-          errorDetail;
+        errorMessage =
+          errorData?.detail ||
+          errorData?.message ||
+          errorMessage;
       } catch {
-        errorDetail =
-          response.statusText ||
-          errorDetail;
+        errorMessage =
+          response.statusText || errorMessage;
       }
 
       throw new ApiError(
-        errorDetail,
+        errorMessage,
         response.status,
         errorData
       );
@@ -116,7 +84,8 @@ async function request<T>(
       response.headers.get("content-type") || "";
 
     if (
-      contentType.includes("application/pdf")
+      contentType.includes("application/pdf") ||
+      contentType.includes("application/octet-stream")
     ) {
       return (await response.blob()) as unknown as T;
     }
@@ -141,47 +110,39 @@ async function request<T>(
     }
 
     throw new ApiError(
-      error.message ||
+      error?.message ||
         "Network connection error. Detection service may be offline.",
       0
     );
   }
 }
 
-
 export const api = {
   get: <T>(
     endpoint: string,
     options?: RequestInit
   ) =>
-    request<T>(
-      endpoint,
-      {
-        ...options,
-        method: "GET",
-      }
-    ),
+    request<T>(endpoint, {
+      ...options,
+      method: "GET",
+    }),
 
   post: <T>(
     endpoint: string,
     body?: any,
     options?: RequestInit
   ) => {
-    const isFormData =
-      body instanceof FormData;
+    const isFormData = body instanceof FormData;
 
-    return request<T>(
-      endpoint,
-      {
-        ...options,
-        method: "POST",
-        body: isFormData
-          ? body
-          : body
-          ? JSON.stringify(body)
-          : undefined,
-      }
-    );
+    return request<T>(endpoint, {
+      ...options,
+      method: "POST",
+      body: isFormData
+        ? body
+        : body
+        ? JSON.stringify(body)
+        : undefined,
+    });
   },
 
   patch: <T>(
@@ -189,26 +150,18 @@ export const api = {
     body?: any,
     options?: RequestInit
   ) =>
-    request<T>(
-      endpoint,
-      {
-        ...options,
-        method: "PATCH",
-        body: body
-          ? JSON.stringify(body)
-          : undefined,
-      }
-    ),
+    request<T>(endpoint, {
+      ...options,
+      method: "PATCH",
+      body: body ? JSON.stringify(body) : undefined,
+    }),
 
   delete: <T>(
     endpoint: string,
     options?: RequestInit
   ) =>
-    request<T>(
-      endpoint,
-      {
-        ...options,
-        method: "DELETE",
-      }
-    ),
+    request<T>(endpoint, {
+      ...options,
+      method: "DELETE",
+    }),
 };
