@@ -30,12 +30,21 @@ async function request<T>(
   endpoint: string,
   options: RequestInit = {}
 ): Promise<T> {
-  const headers = new Headers(options.headers || {});
 
+  const headers = new Headers(
+    options.headers || {}
+  );
+
+  /*
+   * Get the current Supabase login session.
+   */
   const {
     data: { session },
   } = await supabase.auth.getSession();
 
+  /*
+   * Attach Supabase access token to backend request.
+   */
   if (session?.access_token) {
     headers.set(
       'Authorization',
@@ -43,6 +52,9 @@ async function request<T>(
     );
   }
 
+  /*
+   * Add JSON content type only for normal JSON requests.
+   */
   if (
     !(options.body instanceof FormData) &&
     !headers.has('Content-Type')
@@ -53,81 +65,85 @@ async function request<T>(
     );
   }
 
-  const url = `${API_BASE_URL}${
-    endpoint.startsWith('/')
-      ? endpoint
-      : `/${endpoint}`
-  }`;
-
-  let response: Response;
+  const url =
+    `${API_BASE_URL}${
+      endpoint.startsWith('/')
+        ? endpoint
+        : `/${endpoint}`
+    }`;
 
   try {
-    response = await fetch(url, {
+    const response = await fetch(url, {
       ...options,
       headers,
     });
-  } catch {
-    throw new ApiError(
-      'Failed to connect to the detection service.',
-      0
-    );
-  }
 
-  if (response.status === 401) {
-    await supabase.auth.signOut();
+    if (response.status === 401) {
+      window.dispatchEvent(
+        new Event('auth:unauthorized')
+      );
+    }
 
-    throw new ApiError(
-      'Could not validate credentials. Please log in again.',
-      401
-    );
-  }
+    if (!response.ok) {
+      let errorDetail =
+        'An unexpected error occurred';
 
-  if (!response.ok) {
-    let errorData: any = null;
-    let errorMessage = 'An unexpected error occurred.';
+      let errorData = null;
+
+      try {
+        errorData = await response.json();
+
+        errorDetail =
+          errorData.detail ||
+          errorData.message ||
+          errorDetail;
+      } catch {
+        errorDetail =
+          response.statusText ||
+          errorDetail;
+      }
+
+      throw new ApiError(
+        errorDetail,
+        response.status,
+        errorData
+      );
+    }
+
+    const contentType =
+      response.headers.get('content-type');
+
+    if (
+      contentType &&
+      contentType.includes('application/pdf')
+    ) {
+      return (await response.blob()) as unknown as T;
+    }
+
+    const text = await response.text();
+
+    if (!text.trim()) {
+      return {} as T;
+    }
 
     try {
-      errorData = await response.json();
-
-      errorMessage =
-        errorData?.detail ||
-        errorData?.message ||
-        errorMessage;
+      return JSON.parse(text) as T;
     } catch {
-      errorMessage =
-        response.statusText ||
-        errorMessage;
+      throw new ApiError(
+        `Server returned invalid JSON. Status: ${response.status}`,
+        response.status
+      );
+    }
+
+  } catch (error: any) {
+    if (error instanceof ApiError) {
+      throw error;
     }
 
     throw new ApiError(
-      errorMessage,
-      response.status,
-      errorData
-    );
-  }
-
-  const contentType =
-    response.headers.get('content-type') || '';
-
-  if (
-    contentType.includes('application/pdf') ||
-    contentType.includes('application/octet-stream')
-  ) {
-    return (await response.blob()) as unknown as T;
-  }
-
-  const text = await response.text();
-
-  if (!text.trim()) {
-    return {} as T;
-  }
-
-  try {
-    return JSON.parse(text) as T;
-  } catch {
-    throw new ApiError(
-      `Server returned invalid JSON. Status: ${response.status}`,
-      response.status
+      error.message ||
+        'Failed to connect to the detection service.',
+      0
     );
   }
 }
@@ -151,7 +167,9 @@ export const api = {
     body?: any,
     options?: RequestInit
   ) => {
-    const isFormData = body instanceof FormData;
+
+    const isFormData =
+      body instanceof FormData;
 
     return request<T>(
       endpoint,
