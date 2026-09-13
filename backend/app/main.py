@@ -15,7 +15,13 @@ async def lifespan(app: FastAPI):
     """
     Initialize the database when the application starts.
     """
-    init_db()
+    try:
+        init_db()
+        print("Database initialized successfully.")
+    except Exception as exc:
+        print(f"Database initialization failed: {exc}")
+        raise
+
     yield
 
 
@@ -34,7 +40,7 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -47,11 +53,13 @@ app.include_router(
 )
 
 
-# Serve uploaded media and heatmaps
+# Serve uploaded files
 if settings.UPLOAD_DIR.exists():
     app.mount(
         "/uploads",
-        StaticFiles(directory=str(settings.UPLOAD_DIR)),
+        StaticFiles(
+            directory=str(settings.UPLOAD_DIR)
+        ),
         name="uploads",
     )
 
@@ -85,20 +93,11 @@ async def global_exception_handler(
     request: Request,
     exc: Exception,
 ):
+    print(f"Unhandled server error: {exc}")
+
     return JSONResponse(
         status_code=500,
         content={
             "detail": "An unexpected server error occurred."
         },
-    )
-
-
-if __name__ == "__main__":
-    import uvicorn
-
-    uvicorn.run(
-        "app.main:app",
-        host="0.0.0.0",
-        port=8000,
-        reload=True,
     )
