@@ -5,9 +5,9 @@ from sqlalchemy.orm import relationship
 from app.database.base import Base
 
 class UserRole(str, enum.Enum):
-    USER = "user"
+    USER = "USER"
     ADMIN = "ADMIN"
-    LEGACY_USER = "USER"
+    LEGACY_USER = "LEGACY_USER"
 
 class User(Base):
     __tablename__ = "users"
