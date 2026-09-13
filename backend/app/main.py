@@ -12,18 +12,30 @@ from app.api import api_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    init_db()
+    print("Starting DeepGuard backend...")
+
+    try:
+        init_db()
+        print("Database initialized successfully.")
+
+    except Exception as exc:
+        print(
+            f"Database initialization failed: {exc}"
+        )
+
     yield
+
+    print("DeepGuard backend stopped.")
 
 
 app = FastAPI(
     title=settings.APP_TITLE,
     description=(
-        "Enterprise-grade AI deepfake detection web service "
-        "for images, videos, and audio."
+        "Enterprise-grade AI deepfake detection "
+        "web service for images, videos, and audio."
     ),
     version="1.0.0",
-    lifespan=lifespan,
+    lifespan=lifespan
 )
 
 
@@ -31,19 +43,19 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "https://deepguard-ai-isaac.onrender.com",
+        "https://deepguard-frontend-slrj.onrender.com",
         "http://localhost:5173",
         "http://127.0.0.1:5173",
     ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
-    expose_headers=["*"],
 )
 
 
 app.include_router(
     api_router,
-    prefix=settings.API_V1_STR,
+    prefix=settings.API_V1_STR
 )
 
 
@@ -53,7 +65,7 @@ if settings.UPLOAD_DIR.exists():
         StaticFiles(
             directory=str(settings.UPLOAD_DIR)
         ),
-        name="uploads",
+        name="uploads"
     )
 
 
@@ -65,7 +77,7 @@ def root():
         "tagline": "Detect. Verify. Trust.",
         "version": "1.0.0",
         "status": "online",
-        "docs_url": "/docs",
+        "docs_url": "/docs"
     }
 
 
@@ -77,20 +89,25 @@ def health_check():
             "prototype"
             if settings.DEMO_MODE
             else "production"
-        ),
+        )
     }
 
 
 @app.exception_handler(Exception)
 async def global_exception_handler(
     request: Request,
-    exc: Exception,
+    exc: Exception
 ):
-    print(f"Unhandled server error: {exc}")
+    print(
+        f"Unhandled server error: {exc}"
+    )
 
     return JSONResponse(
         status_code=500,
         content={
-            "detail": "Internal server error. Check Render logs."
-        },
+            "detail": (
+                "Internal server error. "
+                "Check Render logs."
+            )
+        }
     )
