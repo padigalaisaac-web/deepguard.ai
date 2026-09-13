@@ -108,7 +108,7 @@ async def get_current_user(
                 metadata.get("name")
                 or user_email.split("@")[0]
             ),
-            role="user",
+            role=UserRole.USER,
             password_hash="SUPABASE_AUTH_USER",
         )
 
