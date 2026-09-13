@@ -1,131 +1,108 @@
 import { supabase } from '../lib/supabase';
 
-const rawApiUrl = import.meta.env.VITE_API_URL || '';
+export type ProfileUpdates = {
+  name?: string;
+  role?: string;
+  password?: string;
+};
 
-const API_BASE_URL = rawApiUrl
-  ? `${rawApiUrl.replace(/\/+$/, '').replace(/\/api$/, '')}/api`
-  : '/api';
-
-export class ApiError extends Error {
-  status: number;
-  data: unknown;
-
-  constructor(
-    message: string,
-    status: number,
-    data?: unknown
+export const authService = {
+  async register(
+    name: string,
+    email: string,
+    password: string
   ) {
-    super(message);
-    this.name = 'ApiError';
-    this.status = status;
-    this.data = data;
-  }
-}
+    const { data, error } =
+      await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            name,
+            role: 'user',
+          },
+        },
+      });
 
-async function request<T>(
-  endpoint: string,
-  options: RequestInit = {}
-): Promise<T> {
-  const { data: sessionData } =
-    await supabase.auth.getSession();
-
-  const session = sessionData.session;
-
-  let cleanEndpoint = endpoint.trim();
-
-  if (cleanEndpoint.startsWith('/api/')) {
-    cleanEndpoint = cleanEndpoint.substring(4);
-  } else if (cleanEndpoint === '/api') {
-    cleanEndpoint = '';
-  }
-
-  if (!cleanEndpoint.startsWith('/')) {
-    cleanEndpoint = `/${cleanEndpoint}`;
-  }
-
-  const url = `${API_BASE_URL}${cleanEndpoint}`;
-
-  console.log('API Request:', url);
-
-  const headers = new Headers(options.headers);
-
-  if (session?.access_token) {
-    headers.set(
-      'Authorization',
-      `Bearer ${session.access_token}`
-    );
-  }
-
-  if (!(options.body instanceof FormData)) {
-    headers.set('Content-Type', 'application/json');
-  }
-
-  const response = await fetch(url, {
-    ...options,
-    headers,
-  });
-
-  const contentType = response.headers.get('content-type');
-
-  const result = contentType?.includes('application/json')
-    ? await response.json()
-    : await response.text();
-
-  if (!response.ok) {
-    let errorMessage =
-      `Request failed with status ${response.status}`;
-
-    if (
-      typeof result === 'object' &&
-      result !== null &&
-      'detail' in result
-    ) {
-      errorMessage = String(
-        (result as { detail: unknown }).detail
-      );
+    if (error) {
+      throw new Error(error.message);
     }
 
-    throw new ApiError(
-      errorMessage,
-      response.status,
-      result
-    );
-  }
+    return data;
+  },
 
-  return result as T;
-}
+  async login(
+    email: string,
+    password: string
+  ) {
+    const { data, error } =
+      await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
 
-export const api = {
-  get: <T>(endpoint: string) =>
-    request<T>(endpoint, {
-      method: 'GET',
-    }),
+    if (error) {
+      throw new Error(error.message);
+    }
 
-  post: <T>(endpoint: string, body?: unknown) =>
-    request<T>(endpoint, {
-      method: 'POST',
-      body:
-        body instanceof FormData
-          ? body
-          : body !== undefined
-            ? JSON.stringify(body)
-            : undefined,
-    }),
+    return data;
+  },
 
-  put: <T>(endpoint: string, body?: unknown) =>
-    request<T>(endpoint, {
-      method: 'PUT',
-      body: JSON.stringify(body),
-    }),
+  async logout() {
+    const { error } =
+      await supabase.auth.signOut();
 
-  patch: <T>(endpoint: string, body?: unknown) =>
-    request<T>(endpoint, {
-      method: 'PATCH',
-      body: JSON.stringify(body),
-    }),
+    if (error) {
+      throw new Error(error.message);
+    }
+  },
 
-  delete: <T>(endpoint: string) =>
-    request<T>(endpoint, {
-      method: 'DELETE',
-    }),
+  async getCurrentUser() {
+    const {
+      data: { user },
+      error,
+    } = await supabase.auth.getUser();
+
+    if (error) {
+      return null;
+    }
+
+    return user;
+  },
+
+  async updateProfile(
+    updates: ProfileUpdates
+  ) {
+    const userMetadata: Record<string, string> = {};
+
+    if (updates.name !== undefined) {
+      userMetadata.name = updates.name;
+    }
+
+    if (updates.role !== undefined) {
+      userMetadata.role = updates.role;
+    }
+
+    const updateData: {
+      data?: Record<string, string>;
+      password?: string;
+    } = {};
+
+    if (Object.keys(userMetadata).length > 0) {
+      updateData.data = userMetadata;
+    }
+
+    if (updates.password) {
+      updateData.password = updates.password;
+    }
+
+    const { data, error } =
+      await supabase.auth.updateUser(updateData);
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    return data.user;
+  },
 };
