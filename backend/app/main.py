@@ -1,7 +1,9 @@
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import JSONResponse
 
 from app.core.config import settings
 from app.database.session import init_db
@@ -10,36 +12,51 @@ from app.api import api_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    init_db()
+    print("Starting DeepGuard API...")
+
+    try:
+        init_db()
+        print("Database initialized successfully.")
+    except Exception as error:
+        print(f"Database initialization failed: {error}")
+
     yield
+
+    print("DeepGuard API stopped.")
 
 
 app = FastAPI(
     title=settings.APP_TITLE,
-    description="Enterprise-grade AI deepfake detection web service.",
+    description=(
+        "Enterprise-grade AI deepfake detection web service "
+        "for images, videos, and audio."
+    ),
     version="1.0.0",
-    lifespan=lifespan
+    lifespan=lifespan,
 )
 
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "https://deepguard-ai-ghj8.onrender.com",
-        "https://deepguard-frontend-slrj.onrender.com",
-        "http://localhost:5173",
-        "http://localhost:3000"
-    ],
-    allow_credentials=True,
+    allow_origins=["*"],
+    allow_credentials=False,
     allow_methods=["*"],
-    allow_headers=["*"]
+    allow_headers=["*"],
 )
 
 
 app.include_router(
     api_router,
-    prefix=settings.API_V1_STR
+    prefix=settings.API_V1_STR,
 )
+
+
+if settings.UPLOAD_DIR.exists():
+    app.mount(
+        "/uploads",
+        StaticFiles(directory=str(settings.UPLOAD_DIR)),
+        name="uploads",
+    )
 
 
 @app.get("/")
@@ -50,7 +67,7 @@ def root():
         "tagline": "Detect. Verify. Trust.",
         "version": "1.0.0",
         "status": "online",
-        "docs_url": "/docs"
+        "docs_url": "/docs",
     }
 
 
@@ -58,5 +75,20 @@ def root():
 def health_check():
     return {
         "status": "healthy",
-        "mode": "prototype" if settings.DEMO_MODE else "production"
+        "mode": "prototype" if settings.DEMO_MODE else "production",
     }
+
+
+@app.exception_handler(Exception)
+async def global_exception_handler(
+    request: Request,
+    exc: Exception,
+):
+    print(f"Unhandled server error: {exc}")
+
+    return JSONResponse(
+        status_code=500,
+        content={
+            "detail": "An unexpected server error occurred."
+        },
+    )
