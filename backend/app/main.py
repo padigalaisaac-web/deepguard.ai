@@ -17,11 +17,8 @@ async def lifespan(app: FastAPI):
     try:
         init_db()
         print("Database initialized successfully.")
-
     except Exception as exc:
-        print(
-            f"Database initialization failed: {exc}"
-        )
+        print(f"Database initialization failed: {exc}")
 
     yield
 
@@ -35,9 +32,8 @@ app = FastAPI(
         "web service for images, videos, and audio."
     ),
     version="1.0.0",
-    lifespan=lifespan
+    lifespan=lifespan,
 )
-
 
 app.add_middleware(
     CORSMiddleware,
@@ -52,20 +48,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
 app.include_router(
     api_router,
-    prefix=settings.API_V1_STR
+    prefix=settings.API_V1_STR,
 )
-
 
 if settings.UPLOAD_DIR.exists():
     app.mount(
         "/uploads",
-        StaticFiles(
-            directory=str(settings.UPLOAD_DIR)
-        ),
-        name="uploads"
+        StaticFiles(directory=str(settings.UPLOAD_DIR)),
+        name="uploads",
     )
 
 
@@ -77,7 +69,7 @@ def root():
         "tagline": "Detect. Verify. Trust.",
         "version": "1.0.0",
         "status": "online",
-        "docs_url": "/docs"
+        "docs_url": "/docs",
     }
 
 
@@ -89,18 +81,16 @@ def health_check():
             "prototype"
             if settings.DEMO_MODE
             else "production"
-        )
+        ),
     }
 
 
 @app.exception_handler(Exception)
 async def global_exception_handler(
     request: Request,
-    exc: Exception
+    exc: Exception,
 ):
-    print(
-        f"Unhandled server error: {exc}"
-    )
+    print(f"Unhandled server error: {exc}")
 
     return JSONResponse(
         status_code=500,
@@ -109,5 +99,5 @@ async def global_exception_handler(
                 "Internal server error. "
                 "Check Render logs."
             )
-        }
+        },
     )
