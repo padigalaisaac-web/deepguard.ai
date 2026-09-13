@@ -13,25 +13,30 @@ HEATMAPS_DIR = UPLOAD_DIR / "heatmaps"
 
 
 class Settings(BaseSettings):
-
     model_config = SettingsConfigDict(
+        case_sensitive=True,
         env_file=".env",
-        case_sensitive=False,
         extra="ignore"
     )
 
-    # Application
     PROJECT_NAME: str = "DeepGuard"
+
     APP_TITLE: str = "DeepGuard AI — Deepfake Detection System"
+
     API_V1_STR: str = "/api"
 
-    # Security
-    SECRET_KEY: str = "change-this-secret-key-in-render"
+    SECRET_KEY: str = "change-this-secret-key-in-production"
+
     ALGORITHM: str = "HS256"
+
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7
 
     # Database
-    DATABASE_URL: str = "sqlite:///./deepguard.db"
+    DATABASE_URL: str = f"sqlite:///{BASE_DIR / 'deepguard.db'}"
+
+    # Supabase
+    SUPABASE_URL: str = ""
+    SUPABASE_ANON_KEY: str = ""
 
     # Storage
     UPLOAD_DIR: Path = UPLOAD_DIR
@@ -64,24 +69,31 @@ class Settings(BaseSettings):
 
     # AI Engine
     MODEL_PATH: str = str(BASE_DIR / "models")
+
     DEMO_MODE: bool = True
-    DEFAULT_MODEL_NAME: str = "DeepGuard Multi-Modal Forensic Engine"
+
+    DEFAULT_MODEL_NAME: str = (
+        "DeepGuard Multi-Modal Forensic Engine"
+    )
+
     DEFAULT_MODEL_VERSION: str = "v1.2.0-forensic"
 
     # CORS
-    # CORS
-BACKEND_CORS_ORIGINS: List[str] = [
-    "https://deepguard-ai-isaac.onrender.com",
-    "http://localhost:5173",
-    "http://localhost:3000",
-    "http://127.0.0.1:5173",
-    "http://127.0.0.1:3000",
-]
+    BACKEND_CORS_ORIGINS: List[str] = [
+        "http://localhost:5173",
+        "http://localhost:3000",
+        "http://127.0.0.1:5173",
+        "http://127.0.0.1:3000",
+
+        # Deployed frontend
+        "https://deepguard-ai-isaac.onrender.com",
+    ]
+
 
 settings = Settings()
 
 
-# Create required folders
-settings.UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-settings.REPORTS_DIR.mkdir(parents=True, exist_ok=True)
-settings.HEATMAPS_DIR.mkdir(parents=True, exist_ok=True)
+# Create required directories
+os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
+os.makedirs(settings.REPORTS_DIR, exist_ok=True)
+os.makedirs(settings.HEATMAPS_DIR, exist_ok=True)
