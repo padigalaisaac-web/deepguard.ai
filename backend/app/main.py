@@ -12,8 +12,6 @@ from app.api import api_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    print("Starting DeepGuard API...")
-
     try:
         init_db()
         print("Database initialized successfully.")
@@ -21,8 +19,6 @@ async def lifespan(app: FastAPI):
         print(f"Database initialization failed: {error}")
 
     yield
-
-    print("DeepGuard API stopped.")
 
 
 app = FastAPI(
@@ -32,37 +28,33 @@ app = FastAPI(
         "for images, videos, and audio."
     ),
     version="1.0.0",
-    lifespan=lifespan,
+    lifespan=lifespan
 )
 
 
+# Correct CORS configuration
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "https://deepguard-ai-isaac.onrender.com",
-        "http://localhost:5173",
-        "http://localhost:3000",
-        "http://127.0.0.1:5173",
-        "http://127.0.0.1:3000",
-    ],
+    allow_origins=settings.BACKEND_CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
-    expose_headers=["Content-Disposition"],
 )
 
 
+# Include API routes
 app.include_router(
     api_router,
-    prefix=settings.API_V1_STR,
+    prefix=settings.API_V1_STR
 )
 
 
+# Static uploaded files
 if settings.UPLOAD_DIR.exists():
     app.mount(
         "/uploads",
         StaticFiles(directory=str(settings.UPLOAD_DIR)),
-        name="uploads",
+        name="uploads"
     )
 
 
@@ -74,7 +66,7 @@ def root():
         "tagline": "Detect. Verify. Trust.",
         "version": "1.0.0",
         "status": "online",
-        "docs_url": "/docs",
+        "docs_url": "/docs"
     }
 
 
@@ -82,14 +74,14 @@ def root():
 def health_check():
     return {
         "status": "healthy",
-        "mode": "prototype" if settings.DEMO_MODE else "production",
+        "mode": "prototype" if settings.DEMO_MODE else "production"
     }
 
 
 @app.exception_handler(Exception)
 async def global_exception_handler(
     request: Request,
-    exc: Exception,
+    exc: Exception
 ):
     print(f"Unhandled server error: {exc}")
 
@@ -97,5 +89,16 @@ async def global_exception_handler(
         status_code=500,
         content={
             "detail": "An unexpected server error occurred."
-        },
+        }
+    )
+
+
+if __name__ == "__main__":
+    import uvicorn
+
+    uvicorn.run(
+        "app.main:app",
+        host="0.0.0.0",
+        port=8000,
+        reload=False
     )
