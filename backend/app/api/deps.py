@@ -7,7 +7,7 @@ from supabase import create_client, Client
 
 from app.core.config import settings
 from app.database.session import get_db
-from app.models.user import User
+from app.models.user import User,UserRole
 
 
 supabase: Optional[Client] = None
