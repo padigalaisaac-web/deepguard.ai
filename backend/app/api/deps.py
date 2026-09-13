@@ -1,7 +1,11 @@
-import os
 from typing import Optional
 
-from fastapi import Depends, HTTPException, Request, status
+from fastapi import (
+    Depends,
+    HTTPException,
+    Request,
+    status,
+)
 from fastapi.security import (
     HTTPBearer,
     HTTPAuthorizationCredentials,
@@ -9,23 +13,25 @@ from fastapi.security import (
 from sqlalchemy.orm import Session
 from supabase import create_client, Client
 
+from app.core.config import settings
 from app.database.session import get_db
 from app.models.user import User
 
 
-SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY")
-
-
-if not SUPABASE_URL or not SUPABASE_ANON_KEY:
+if not settings.SUPABASE_URL:
     raise RuntimeError(
-        "SUPABASE_URL and SUPABASE_ANON_KEY are required."
+        "SUPABASE_URL is missing in Render environment variables."
+    )
+
+if not settings.SUPABASE_ANON_KEY:
+    raise RuntimeError(
+        "SUPABASE_ANON_KEY is missing in Render environment variables."
     )
 
 
 supabase: Client = create_client(
-    SUPABASE_URL,
-    SUPABASE_ANON_KEY,
+    settings.SUPABASE_URL,
+    settings.SUPABASE_ANON_KEY,
 )
 
 
@@ -73,7 +79,9 @@ async def get_current_user(
 
         supabase_user = response.user
 
-    except Exception:
+    except Exception as error:
+        print(f"Supabase token validation failed: {error}")
+
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=(
@@ -92,7 +100,6 @@ async def get_current_user(
         )
 
     user_email = supabase_user.email
-    supabase_user_id = str(supabase_user.id)
 
     if not user_email:
         raise HTTPException(
@@ -130,11 +137,13 @@ async def get_current_user(
 async def get_current_admin_user(
     current_user: User = Depends(get_current_user),
 ) -> User:
-    """
-    Allow only admin users to access admin endpoints.
-    """
 
-    if str(current_user.role).lower() not in ["admin", "userrole.admin"]:
+    role = str(current_user.role).lower()
+
+    if role not in [
+        "admin",
+        "userrole.admin",
+    ]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Admin access required.",
