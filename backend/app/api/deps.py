@@ -102,14 +102,14 @@ async def get_current_user(
     if not local_user:
         metadata = supabase_user.user_metadata or {}
 
-     local_user = User(
-    email=user_email,
-    name=(
-        metadata.get("name")
-        or user_email.split("@")[0]
-    ),
-    role="user",
-)
+        local_user = User(
+            email=user_email,
+            name=(
+                metadata.get("name")
+                or user_email.split("@")[0]
+            ),
+            role="user",
+        )
 
         db.add(local_user)
         db.commit()
