@@ -5,8 +5,9 @@ from sqlalchemy.orm import relationship
 from app.database.base import Base
 
 class UserRole(str, enum.Enum):
-    USER = "USER"
+    USER = "user"
     ADMIN = "ADMIN"
+    LEGACY_USER = "USER"
 
 class User(Base):
     __tablename__ = "users"
@@ -15,7 +16,7 @@ class User(Base):
     name = Column(String(255), nullable=False)
     email = Column(String(255), unique=True, index=True, nullable=False)
     password_hash = Column(String(255), nullable=True)
-    role = Column(Enum(UserRole), default=UserRole.USER, nullable=False)
+    role = Column(Enum(UserRole, name="userrole", validate_strings=True), default=UserRole.USER, nullable=False)
     is_active = Column(Boolean, default=True, nullable=False)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
