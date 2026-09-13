@@ -1,4 +1,3 @@
-
 import time
 import hashlib
 from pathlib import Path
@@ -20,16 +19,15 @@ class ImageDeepfakeDetector(BaseDetector):
     def __init__(self):
         super().__init__(
             model_name="DeepGuard AI Image Detector",
-            model_version="v3.0.0-real-onnx",
-            mode="prototype" if settings.DEMO_MODE else "production",
+            model_version="v4.0.0-onnx-only",
+            mode="onnx-ai-model",
         )
 
     def detect(
         self,
         file_path: Path,
-        original_filename: str
+        original_filename: str,
     ) -> DetectionOutput:
-
         start_time = time.time()
 
         # ---------------------------------------------------------
@@ -41,6 +39,8 @@ class ImageDeepfakeDetector(BaseDetector):
 
         # ---------------------------------------------------------
         # 2. Extract forensic features
+        # These are used for information and indicators only.
+        # They are NOT used to decide Real/Fake.
         # ---------------------------------------------------------
         fft_metrics = ImageFeatureExtractor.extract_fft_spectrum(
             img_array
@@ -63,7 +63,7 @@ class ImageDeepfakeDetector(BaseDetector):
         )
 
         # ---------------------------------------------------------
-        # 3. Generate anomaly heatmap
+        # 3. Generate heatmap
         # ---------------------------------------------------------
         heatmap_filename, heatmap_url = (
             ImageExplainability.generate_anomaly_heatmap(
@@ -74,15 +74,17 @@ class ImageDeepfakeDetector(BaseDetector):
         )
 
         # ---------------------------------------------------------
-        # 4. SHA-256 file integrity hash
+        # 4. File hash
         # ---------------------------------------------------------
-        with open(file_path, "rb") as f:
-            file_hash = hashlib.sha256(f.read()).hexdigest()
+        with open(file_path, "rb") as file:
+            file_hash = hashlib.sha256(
+                file.read()
+            ).hexdigest()
 
         # ---------------------------------------------------------
-        # 5. REAL AI MODEL PREDICTION
+        # 5. REAL ONNX MODEL PREDICTION
+        # Do not silently use a heuristic fallback.
         # ---------------------------------------------------------
-        model_ai_probability = None
         model_error = None
 
         try:
@@ -90,110 +92,41 @@ class ImageDeepfakeDetector(BaseDetector):
 
         except Exception as exc:
             model_error = str(exc)
-            print(f"AI model prediction failed: {exc}")
+
+            print(
+                "AI MODEL PREDICTION FAILED:",
+                repr(exc),
+            )
+
+            raise RuntimeError(
+                "The AI detection model failed. "
+                "The image was not classified."
+            ) from exc
+
+        if model_ai_probability is None:
+            raise RuntimeError(
+                "The AI detection model returned no prediction."
+            )
+
+        ai_probability = float(model_ai_probability)
+
+        if ai_probability < 0.0 or ai_probability > 100.0:
+            raise RuntimeError(
+                "The AI model returned an invalid probability: "
+                f"{ai_probability}"
+            )
+
+        ai_model_used = True
 
         # ---------------------------------------------------------
-        # 6. Fallback forensic score
+        # 6. Final classification
         #
-        # This is ONLY used if the ONNX model fails.
-        # The normal decision always uses the real AI model.
+        # IMPORTANT:
+        # predict_ai_probability() must return:
+        # 0   = definitely real
+        # 100 = definitely AI-generated/fake
         # ---------------------------------------------------------
-        fallback_score = 10.0
-
-        ai_tags = metadata.get("ai_metadata_tags", [])
-        has_direct_ai_tags = len(ai_tags) > 0
-
-        filename_lower = original_filename.lower()
-
-        is_ai_filename = any(
-            word in filename_lower
-            for word in [
-                "midjourney",
-                "mj_",
-                "dalle",
-                "dall-e",
-                "stablediffusion",
-                "sd_",
-                "flux_",
-                "ai_gen",
-                "generation",
-                "synthetic",
-                "deepfake",
-                "fake_",
-                "generated",
-                "civitai",
-                "prompt",
-                "novelai",
-                "comfyui",
-                "craiyon",
-                "nightcafe",
-            ]
-        )
-
-        if has_direct_ai_tags:
-            fallback_score += 70.0
-        elif is_ai_filename:
-            fallback_score += 45.0
-
-        fft_variance = fft_metrics.get(
-            "fft_spectrum_variance",
-            200.0,
-        )
-
-        chromatic_div = chromatic_metrics.get(
-            "channel_divergence",
-            15.0,
-        )
-
-        laplacian_var = face_metrics.get(
-            "laplacian_variance",
-            300.0,
-        )
-
-        if chromatic_div > 35.0:
-            fallback_score += 20.0
-        elif chromatic_div > 25.0:
-            fallback_score += 10.0
-
-        if fft_variance > 450.0:
-            fallback_score += 20.0
-        elif fft_variance > 380.0:
-            fallback_score += 10.0
-
-        if laplacian_var < 80.0 and ela_std > 2.0:
-            fallback_score += 15.0
-
-        fallback_score = max(
-            1.0,
-            min(99.0, fallback_score),
-        )
-
-        # ---------------------------------------------------------
-        # 7. FINAL AI PROBABILITY
-        # ---------------------------------------------------------
-        if model_ai_probability is not None:
-            # REAL MODEL = PRIMARY SOURCE
-            ai_probability = float(model_ai_probability)
-            ai_model_used = True
-
-        else:
-            # Only use forensic fallback if model failed
-            ai_probability = fallback_score
-            ai_model_used = False
-
-        ai_probability = max(
-            0.0,
-            min(100.0, ai_probability),
-        )
-
-        # ---------------------------------------------------------
-        # 8. BINARY IMAGE CLASSIFICATION
-        #
-        # >= 50% = AI GENERATED = RED
-        # < 50%  = NOT AI GENERATED = GREEN
-        # ---------------------------------------------------------
-        if ai_probability >= 65.0:
-
+        if ai_probability >= 50.0:
             result = "LIKELY_DEEPFAKE"
             risk_level = "HIGH"
 
@@ -208,13 +141,12 @@ class ImageDeepfakeDetector(BaseDetector):
             )
 
             explanation_summary = (
-                "AI-GENERATED IMAGE DETECTED: "
-                "The trained AI image detection model "
-                "classified this image as likely synthetic."
+                "The ONNX AI image detection model "
+                "classified this image as likely "
+                "AI-generated or manipulated."
             )
 
         else:
-
             result = "AUTHENTIC"
             risk_level = "LOW"
 
@@ -229,55 +161,61 @@ class ImageDeepfakeDetector(BaseDetector):
             )
 
             explanation_summary = (
-                "NO AI GENERATION DETECTED: "
-                "The trained AI image detection model "
+                "The ONNX AI image detection model "
                 "classified this image as likely authentic."
             )
 
         # ---------------------------------------------------------
-        # 9. FORENSIC INDICATORS
+        # 7. Indicators
         # ---------------------------------------------------------
         indicators: List[IndicatorResult] = []
 
-        if model_ai_probability is not None:
-
-            indicators.append(
-                IndicatorResult(
-                    name="AI Image Classification Model",
-                    category="ai_detection",
-                    severity=(
-                        "HIGH"
-                        if ai_probability >= 50.0
-                        else "LOW"
+        indicators.append(
+            IndicatorResult(
+                name="ONNX AI Image Classification",
+                category="ai_detection",
+                severity=(
+                    "HIGH"
+                    if ai_probability >= 50.0
+                    else "LOW"
+                ),
+                confidence=round(
+                    max(
+                        ai_probability,
+                        100.0 - ai_probability,
                     ),
-                    confidence=round(
-                        ai_probability
-                        if ai_probability >= 50.0
-                        else 100.0 - ai_probability,
-                        1,
-                    ),
-                    description=(
-                        "ONNX-based AI image classifier "
-                        "evaluated the visual content."
-                    ),
-                    metric_value=(
-                        f"AI Probability: "
-                        f"{ai_probability:.2f}%"
-                    ),
-                )
+                    1,
+                ),
+                description=(
+                    "The trained ONNX image classification "
+                    "model evaluated the image."
+                ),
+                metric_value=(
+                    f"AI Probability: "
+                    f"{ai_probability:.2f}%"
+                ),
             )
+        )
 
-        if has_direct_ai_tags:
+        # ---------------------------------------------------------
+        # 8. Metadata indicators
+        # These do not change the final prediction.
+        # ---------------------------------------------------------
+        ai_tags = metadata.get(
+            "ai_metadata_tags",
+            [],
+        )
 
+        if ai_tags:
             indicators.append(
                 IndicatorResult(
                     name="AI Generation Metadata",
                     category="metadata",
-                    severity="HIGH",
-                    confidence=99.0,
+                    severity="MEDIUM",
+                    confidence=90.0,
                     description=(
-                        "Metadata containing AI-generation "
-                        "parameters or tags was detected."
+                        "Metadata containing possible "
+                        "AI-generation information was detected."
                     ),
                     metric_value=(
                         f"AI Tags: {', '.join(ai_tags)}"
@@ -285,26 +223,30 @@ class ImageDeepfakeDetector(BaseDetector):
                 )
             )
 
-        if fft_variance > 380.0:
+        # ---------------------------------------------------------
+        # 9. Forensic indicators
+        # These are informational only.
+        # ---------------------------------------------------------
+        fft_variance = fft_metrics.get(
+            "fft_spectrum_variance",
+            0.0,
+        )
 
+        chromatic_div = chromatic_metrics.get(
+            "channel_divergence",
+            0.0,
+        )
+
+        if fft_variance > 380.0:
             indicators.append(
                 IndicatorResult(
-                    name="High Frequency Spectral Anomaly",
+                    name="High Frequency Spectral Activity",
                     category="frequency",
                     severity="MEDIUM",
-                    confidence=round(
-                        min(
-                            95.0,
-                            max(
-                                50.0,
-                                ai_probability,
-                            ),
-                        ),
-                        1,
-                    ),
+                    confidence=50.0,
                     description=(
-                        "Elevated high-frequency spectral "
-                        "activity was observed."
+                        "High-frequency image activity was observed. "
+                        "This is not proof of AI generation."
                     ),
                     metric_value=(
                         f"FFT Variance: "
@@ -314,25 +256,16 @@ class ImageDeepfakeDetector(BaseDetector):
             )
 
         if chromatic_div > 25.0:
-
             indicators.append(
                 IndicatorResult(
-                    name="Chromatic Consistency Anomaly",
+                    name="Chromatic Distribution Activity",
                     category="color",
                     severity="MEDIUM",
-                    confidence=round(
-                        min(
-                            95.0,
-                            max(
-                                50.0,
-                                ai_probability,
-                            ),
-                        ),
-                        1,
-                    ),
+                    confidence=50.0,
                     description=(
-                        "Unusual RGB channel distribution "
-                        "was detected."
+                        "An unusual RGB channel distribution "
+                        "was observed. This is not proof "
+                        "of AI generation."
                     ),
                     metric_value=(
                         f"Channel Divergence: "
@@ -341,27 +274,8 @@ class ImageDeepfakeDetector(BaseDetector):
                 )
             )
 
-        if not indicators:
-
-            indicators.append(
-                IndicatorResult(
-                    name="Standard Image Analysis",
-                    category="forensics",
-                    severity="LOW",
-                    confidence=round(
-                        confidence,
-                        1,
-                    ),
-                    description=(
-                        "No significant forensic anomalies "
-                        "were detected."
-                    ),
-                    metric_value="Normal",
-                )
-            )
-
         # ---------------------------------------------------------
-        # 10. Metadata returned to frontend/report
+        # 10. Metadata returned to frontend
         # ---------------------------------------------------------
         all_metadata = {
             **metadata,
@@ -386,16 +300,16 @@ class ImageDeepfakeDetector(BaseDetector):
 
             "ai_model_used": ai_model_used,
 
-            "fallback_probability": round(
-                fallback_score,
-                2,
-            ),
-
             "image_verdict": result,
 
             "file_sha256": file_hash,
 
             "original_filename": original_filename,
+
+            "detector_note": (
+                "Final classification uses the ONNX model only. "
+                "Forensic features are informational."
+            ),
         }
 
         if model_error:
@@ -414,29 +328,16 @@ class ImageDeepfakeDetector(BaseDetector):
         # ---------------------------------------------------------
         return DetectionOutput(
             result=result,
-
             confidence=confidence,
-
             authenticity_score=authenticity_score,
-
             risk_level=risk_level,
-
             model_name=self.model_name,
-
             model_version=self.model_version,
-
             model_mode=self.mode,
-
             processing_time=processing_time,
-
             explanation_summary=explanation_summary,
-
             indicators=indicators,
-
             frames=[],
-
             metadata=all_metadata,
-
             heatmap_path=heatmap_url,
         )
-
