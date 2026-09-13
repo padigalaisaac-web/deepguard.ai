@@ -3,14 +3,18 @@ import { supabase } from '../lib/supabase';
 const rawApiUrl = import.meta.env.VITE_API_URL || '';
 
 const API_BASE_URL = rawApiUrl
-  ? `${rawApiUrl.replace(/\/+$/, '')}/api`
+  ? `${rawApiUrl.replace(/\/+$/, '').replace(/\/api$/, '')}/api`
   : '/api';
 
 export class ApiError extends Error {
   status: number;
   data: unknown;
 
-  constructor(message: string, status: number, data?: unknown) {
+  constructor(
+    message: string,
+    status: number,
+    data?: unknown
+  ) {
     super(message);
     this.name = 'ApiError';
     this.status = status;
@@ -22,14 +26,22 @@ async function request<T>(
   endpoint: string,
   options: RequestInit = {}
 ): Promise<T> {
-  const { data: sessionData } = await supabase.auth.getSession();
+  const { data: sessionData } =
+    await supabase.auth.getSession();
+
   const session = sessionData.session;
 
-  const cleanEndpoint = endpoint.startsWith('/api/')
-    ? endpoint.substring(4)
-    : endpoint.startsWith('/')
-      ? endpoint
-      : `/${endpoint}`;
+  let cleanEndpoint = endpoint.trim();
+
+  if (cleanEndpoint.startsWith('/api/')) {
+    cleanEndpoint = cleanEndpoint.substring(4);
+  } else if (cleanEndpoint === '/api') {
+    cleanEndpoint = '';
+  }
+
+  if (!cleanEndpoint.startsWith('/')) {
+    cleanEndpoint = `/${cleanEndpoint}`;
+  }
 
   const url = `${API_BASE_URL}${cleanEndpoint}`;
 
@@ -54,15 +66,26 @@ async function request<T>(
   });
 
   const contentType = response.headers.get('content-type');
+
   const result = contentType?.includes('application/json')
     ? await response.json()
     : await response.text();
 
   if (!response.ok) {
+    let errorMessage = `Request failed with status ${response.status}`;
+
+    if (
+      typeof result === 'object' &&
+      result !== null &&
+      'detail' in result
+    ) {
+      errorMessage = String(
+        (result as { detail: unknown }).detail
+      );
+    }
+
     throw new ApiError(
-      typeof result === 'object' && result !== null && 'detail' in result
-        ? String((result as { detail: unknown }).detail)
-        : `Request failed with status ${response.status}`,
+      errorMessage,
       response.status,
       result
     );
@@ -80,9 +103,12 @@ export const api = {
   post: <T>(endpoint: string, body?: unknown) =>
     request<T>(endpoint, {
       method: 'POST',
-      body: body instanceof FormData
-        ? body
-        : JSON.stringify(body),
+      body:
+        body instanceof FormData
+          ? body
+          : body !== undefined
+            ? JSON.stringify(body)
+            : undefined,
     }),
 
   put: <T>(endpoint: string, body?: unknown) =>
