@@ -1,152 +1,96 @@
-from typing import Optional
+from contextlib import asynccontextmanager
 
-from fastapi import (
-    Depends,
-    HTTPException,
-    Request,
-    status,
-)
-from fastapi.security import (
-    HTTPBearer,
-    HTTPAuthorizationCredentials,
-)
-from sqlalchemy.orm import Session
-from supabase import create_client, Client
+from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import JSONResponse
 
 from app.core.config import settings
-from app.database.session import get_db
-from app.models.user import User
+from app.database.session import init_db
+from app.api import api_router
 
 
-if not settings.SUPABASE_URL:
-    raise RuntimeError(
-        "SUPABASE_URL is missing in Render environment variables."
-    )
-
-if not settings.SUPABASE_ANON_KEY:
-    raise RuntimeError(
-        "SUPABASE_ANON_KEY is missing in Render environment variables."
-    )
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    init_db()
+    yield
 
 
-supabase: Client = create_client(
-    settings.SUPABASE_URL,
-    settings.SUPABASE_ANON_KEY,
+app = FastAPI(
+    title=settings.APP_TITLE,
+    description=(
+        "Enterprise-grade AI deepfake detection web service "
+        "for images, videos, and audio."
+    ),
+    version="1.0.0",
+    lifespan=lifespan,
 )
 
 
-security = HTTPBearer(auto_error=False)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "https://deepguard-ai-isaac.onrender.com",
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+    expose_headers=["*"],
+)
 
 
-def get_client_ip(
+app.include_router(
+    api_router,
+    prefix=settings.API_V1_STR,
+)
+
+
+if settings.UPLOAD_DIR.exists():
+    app.mount(
+        "/uploads",
+        StaticFiles(
+            directory=str(settings.UPLOAD_DIR)
+        ),
+        name="uploads",
+    )
+
+
+@app.get("/")
+def root():
+    return {
+        "app": settings.PROJECT_NAME,
+        "title": settings.APP_TITLE,
+        "tagline": "Detect. Verify. Trust.",
+        "version": "1.0.0",
+        "status": "online",
+        "docs_url": "/docs",
+    }
+
+
+@app.get("/health")
+def health_check():
+    return {
+        "status": "healthy",
+        "mode": (
+            "prototype"
+            if settings.DEMO_MODE
+            else "production"
+        ),
+    }
+
+
+@app.exception_handler(Exception)
+async def global_exception_handler(
     request: Request,
-) -> Optional[str]:
-    forwarded_for = request.headers.get(
-        "X-Forwarded-For"
+    exc: Exception,
+):
+    print(f"Unhandled server error: {exc}")
+
+    return JSONResponse(
+        status_code=500,
+        content={
+            "detail": "Internal server error. Check Render logs."
+        },
     )
-
-    if forwarded_for:
-        return forwarded_for.split(",")[0].strip()
-
-    if request.client:
-        return request.client.host
-
-    return None
-
-
-async def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(
-        security
-    ),
-    db: Session = Depends(get_db),
-) -> User:
-
-    if credentials is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Authorization token is missing.",
-            headers={
-                "WWW-Authenticate": "Bearer"
-            },
-        )
-
-    access_token = credentials.credentials
-
-    try:
-        response = supabase.auth.get_user(
-            access_token
-        )
-
-        supabase_user = response.user
-
-    except Exception as error:
-        print(f"Supabase token validation failed: {error}")
-
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=(
-                "Could not validate credentials. "
-                "Please log in again."
-            ),
-            headers={
-                "WWW-Authenticate": "Bearer"
-            },
-        )
-
-    if not supabase_user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid Supabase user.",
-        )
-
-    user_email = supabase_user.email
-
-    if not user_email:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Supabase account email not found.",
-        )
-
-    local_user = (
-        db.query(User)
-        .filter(User.email == user_email)
-        .first()
-    )
-
-    if not local_user:
-        metadata = (
-            supabase_user.user_metadata or {}
-        )
-
-        local_user = User(
-            name=(
-                metadata.get("name")
-                or user_email.split("@")[0]
-            ),
-            email=user_email,
-            role=metadata.get("role", "user"),
-        )
-
-        db.add(local_user)
-        db.commit()
-        db.refresh(local_user)
-
-    return local_user
-
-
-async def get_current_admin_user(
-    current_user: User = Depends(get_current_user),
-) -> User:
-
-    role = str(current_user.role).lower()
-
-    if role not in [
-        "admin",
-        "userrole.admin",
-    ]:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Admin access required.",
-        )
-
-    return current_user
