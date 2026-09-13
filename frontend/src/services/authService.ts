@@ -1,78 +1,131 @@
 import { supabase } from '../lib/supabase';
 
-export const authService = {
-  async register(name: string, email: string, password: string) {
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: {
-          name,
-          role: 'user',
-        },
-      },
-    });
+const rawApiUrl = import.meta.env.VITE_API_URL || '';
 
-    if (error) throw new Error(error.message);
+const API_BASE_URL = rawApiUrl
+  ? `${rawApiUrl.replace(/\/+$/, '').replace(/\/api$/, '')}/api`
+  : '/api';
 
-    return data;
-  },
+export class ApiError extends Error {
+  status: number;
+  data: unknown;
 
-  async login(email: string, password: string) {
-    const { data, error } =
-      await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
+  constructor(
+    message: string,
+    status: number,
+    data?: unknown
+  ) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+    this.data = data;
+  }
+}
 
-    if (error) throw new Error(error.message);
+async function request<T>(
+  endpoint: string,
+  options: RequestInit = {}
+): Promise<T> {
+  const { data: sessionData } =
+    await supabase.auth.getSession();
 
-    return data;
-  },
+  const session = sessionData.session;
 
-  async logout() {
-    const { error } = await supabase.auth.signOut();
+  let cleanEndpoint = endpoint.trim();
 
-    if (error) throw new Error(error.message);
-  },
+  if (cleanEndpoint.startsWith('/api/')) {
+    cleanEndpoint = cleanEndpoint.substring(4);
+  } else if (cleanEndpoint === '/api') {
+    cleanEndpoint = '';
+  }
 
-  async getCurrentUser() {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+  if (!cleanEndpoint.startsWith('/')) {
+    cleanEndpoint = `/${cleanEndpoint}`;
+  }
 
-    return user;
-  },
+  const url = `${API_BASE_URL}${cleanEndpoint}`;
 
-  async updateProfile(updates: {
-    name?: string;
-    role?: string;
-    password?: string;
-  }) {
-    const userData: {
-      data?: {
-        name?: string;
-        role?: string;
-      };
-      password?: string;
-    } = {};
+  console.log('API Request:', url);
 
-    if (updates.name || updates.role) {
-      userData.data = {
-        name: updates.name,
-        role: updates.role,
-      };
+  const headers = new Headers(options.headers);
+
+  if (session?.access_token) {
+    headers.set(
+      'Authorization',
+      `Bearer ${session.access_token}`
+    );
+  }
+
+  if (!(options.body instanceof FormData)) {
+    headers.set('Content-Type', 'application/json');
+  }
+
+  const response = await fetch(url, {
+    ...options,
+    headers,
+  });
+
+  const contentType = response.headers.get('content-type');
+
+  const result = contentType?.includes('application/json')
+    ? await response.json()
+    : await response.text();
+
+  if (!response.ok) {
+    let errorMessage =
+      `Request failed with status ${response.status}`;
+
+    if (
+      typeof result === 'object' &&
+      result !== null &&
+      'detail' in result
+    ) {
+      errorMessage = String(
+        (result as { detail: unknown }).detail
+      );
     }
 
-    if (updates.password) {
-      userData.password = updates.password;
-    }
+    throw new ApiError(
+      errorMessage,
+      response.status,
+      result
+    );
+  }
 
-    const { data, error } =
-      await supabase.auth.updateUser(userData);
+  return result as T;
+}
 
-    if (error) throw new Error(error.message);
+export const api = {
+  get: <T>(endpoint: string) =>
+    request<T>(endpoint, {
+      method: 'GET',
+    }),
 
-    return data.user;
-  },
+  post: <T>(endpoint: string, body?: unknown) =>
+    request<T>(endpoint, {
+      method: 'POST',
+      body:
+        body instanceof FormData
+          ? body
+          : body !== undefined
+            ? JSON.stringify(body)
+            : undefined,
+    }),
+
+  put: <T>(endpoint: string, body?: unknown) =>
+    request<T>(endpoint, {
+      method: 'PUT',
+      body: JSON.stringify(body),
+    }),
+
+  patch: <T>(endpoint: string, body?: unknown) =>
+    request<T>(endpoint, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    }),
+
+  delete: <T>(endpoint: string) =>
+    request<T>(endpoint, {
+      method: 'DELETE',
+    }),
 };
