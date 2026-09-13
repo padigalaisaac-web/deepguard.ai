@@ -4,40 +4,54 @@ from sqlalchemy.orm import sessionmaker, Session
 from app.core.config import settings
 from app.database.base import Base
 
+# Register all models
 import app.models
 
 
-DATABASE_URL = settings.DATABASE_URL
-
 connect_args = {}
 
-if DATABASE_URL.startswith("sqlite"):
+if settings.DATABASE_URL.startswith("sqlite"):
     connect_args = {
         "check_same_thread": False
     }
 
+
 engine = create_engine(
-    DATABASE_URL,
+    settings.DATABASE_URL,
     connect_args=connect_args,
-    pool_pre_ping=True,
     echo=False,
+    pool_pre_ping=True
 )
+
 
 SessionLocal = sessionmaker(
     autocommit=False,
     autoflush=False,
-    bind=engine,
+    bind=engine
 )
 
 
 def get_db():
-    db: Session = SessionLocal()
+    db = SessionLocal()
 
     try:
         yield db
+
     finally:
         db.close()
 
 
 def init_db():
     Base.metadata.create_all(bind=engine)
+
+    db = SessionLocal()
+
+    try:
+        print("Database tables initialized successfully.")
+
+    except Exception as exc:
+        db.rollback()
+        print(f"Database initialization error: {exc}")
+
+    finally:
+        db.close()
