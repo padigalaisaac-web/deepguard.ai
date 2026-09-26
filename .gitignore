@@ -15,8 +15,6 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
-lib64/
 parts/
 sdist/
 var/
@@ -61,6 +59,9 @@ backend/reports/*.pdf
 backend/.env
 frontend/.env
 *.env.local
+
+# Explicitly ensure source code is tracked
+!frontend/src/lib/
 
 # OS
 .DS_Store
