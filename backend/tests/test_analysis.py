@@ -44,3 +44,46 @@ def test_upload_and_analyze_image(client):
     report_res = client.get(f"/api/analysis/{analysis_id}/report", headers=headers)
     assert report_res.status_code == 200
     assert report_res.headers["content-type"] == "application/pdf"
+
+
+def test_real_camera_image_authenticity(client):
+    # 1. Login user
+    res_login = client.post("/api/auth/login", json={
+        "email": "user@deepguard.ai",
+        "password": "User@123456"
+    })
+    assert res_login.status_code == 200
+    token = res_login.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+    
+    # 2. Create in-memory test image with camera EXIF tags
+    exif = Image.Exif()
+    exif[0x010F] = "Canon"
+    exif[0x0110] = "Canon EOS R5"
+    
+    img_byte_arr = io.BytesIO()
+    image = Image.new("RGB", (300, 300), color=(110, 140, 170))
+    image.save(img_byte_arr, format="JPEG", exif=exif)
+    img_bytes = img_byte_arr.getvalue()
+    
+    # 3. Upload image
+    upload_res = client.post(
+        "/api/analysis/upload",
+        files={"file": ("canon_camera_photo.jpg", img_bytes, "image/jpeg")},
+        headers=headers
+    )
+    assert upload_res.status_code == 201
+    analysis_id = upload_res.json()["analysis_id"]
+    
+    # 4. Run Analysis
+    run_res = client.post(f"/api/analysis/{analysis_id}/run", headers=headers)
+    assert run_res.status_code == 200
+    result = run_res.json()
+    
+    assert result["status"] == "COMPLETED"
+    assert result["result"] == "AUTHENTIC"
+    assert result["authenticity_score"] == 100.0
+    assert result["confidence"] == 100.0
+    assert result["risk_level"] == "LOW"
+    assert any("Camera Hardware" in ind["name"] for ind in result["indicators"])
+
