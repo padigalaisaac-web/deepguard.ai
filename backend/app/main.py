@@ -21,6 +21,13 @@ async def lifespan(app: FastAPI):
     except Exception as exc:
         print(f"Database initialization failed: {exc}")
 
+    try:
+        from app.ai.detectors.real_ai_detector import get_session
+        get_session()
+        print("ONNX AI Model loaded and warmed up into memory.")
+    except Exception as exc:
+        print(f"ONNX Model pre-load warning (will load on first request): {exc}")
+
     yield
 
     print("DeepGuard backend stopped.")
@@ -82,7 +89,7 @@ def root():
 @app.get("/health")
 def health_check():
     return {
-        "status": "healthy",
+        "status": "ok",
         "mode": (
             "prototype"
             if settings.DEMO_MODE

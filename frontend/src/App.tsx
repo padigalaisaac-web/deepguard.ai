@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { Suspense, lazy } from 'react';
 import {
   BrowserRouter,
   Routes,
@@ -13,22 +13,31 @@ import { Navbar } from './components/common/Navbar';
 import { Sidebar } from './components/common/Sidebar';
 import { Footer } from './components/common/Footer';
 
-// Pages
+// Core pages
 import LandingPage from './pages/LandingPage';
 import { LoginPage } from './pages/LoginPage';
 import { RegisterPage } from './pages/RegisterPage';
-import { DashboardPage } from './pages/DashboardPage';
-import { AnalyzePage } from './pages/AnalyzePage';
-import { ResultPage } from './pages/ResultPage';
-import { HistoryPage } from './pages/HistoryPage';
-import { ReportPage } from './pages/ReportPage';
-import { ProfilePage } from './pages/ProfilePage';
-import { AdminDashboardPage } from './pages/AdminDashboardPage';
-import { AdminUsersPage } from './pages/AdminUsersPage';
-import { AdminLogsPage } from './pages/AdminLogsPage';
-import { AboutPage } from './pages/AboutPage';
-import { PrivacyPage } from './pages/PrivacyPage';
-import { NotFoundPage } from './pages/NotFoundPage';
+
+// Lazy-loaded pages for fast initial bundle delivery
+const DashboardPage = lazy(() => import('./pages/DashboardPage').then(m => ({ default: m.DashboardPage })));
+const AnalyzePage = lazy(() => import('./pages/AnalyzePage').then(m => ({ default: m.AnalyzePage })));
+const ResultPage = lazy(() => import('./pages/ResultPage').then(m => ({ default: m.ResultPage })));
+const HistoryPage = lazy(() => import('./pages/HistoryPage').then(m => ({ default: m.HistoryPage })));
+const ReportPage = lazy(() => import('./pages/ReportPage').then(m => ({ default: m.ReportPage })));
+const ProfilePage = lazy(() => import('./pages/ProfilePage').then(m => ({ default: m.ProfilePage })));
+const AdminDashboardPage = lazy(() => import('./pages/AdminDashboardPage').then(m => ({ default: m.AdminDashboardPage })));
+const AdminUsersPage = lazy(() => import('./pages/AdminUsersPage').then(m => ({ default: m.AdminUsersPage })));
+const AdminLogsPage = lazy(() => import('./pages/AdminLogsPage').then(m => ({ default: m.AdminLogsPage })));
+const AboutPage = lazy(() => import('./pages/AboutPage').then(m => ({ default: m.AboutPage })));
+const PrivacyPage = lazy(() => import('./pages/PrivacyPage').then(m => ({ default: m.PrivacyPage })));
+const NotFoundPage = lazy(() => import('./pages/NotFoundPage').then(m => ({ default: m.NotFoundPage })));
+
+const PageLoadingSpinner: React.FC = () => (
+  <div className="min-h-[50vh] flex flex-col items-center justify-center p-8 space-y-3">
+    <div className="w-10 h-10 rounded-full border-2 border-cyan-500/20 border-t-cyan-500 animate-spin" />
+    <span className="text-xs text-slate-400 font-mono tracking-wider">Loading DeepGuard module...</span>
+  </div>
+);
 
 // Protected Route wrapper
 const ProtectedRoute: React.FC<{
@@ -98,120 +107,122 @@ export const AppContent: React.FC = () => {
       <Navbar />
 
       <div className="flex-1">
-        <Routes>
-          {/* Public Routes */}
-          <Route path="/" element={<LandingPage />} />
+        <Suspense fallback={<PageLoadingSpinner />}>
+          <Routes>
+            {/* Public Routes */}
+            <Route path="/" element={<LandingPage />} />
 
-          <Route path="/login" element={<LoginPage />} />
+            <Route path="/login" element={<LoginPage />} />
 
-          <Route path="/register" element={<RegisterPage />} />
+            <Route path="/register" element={<RegisterPage />} />
 
-          <Route path="/about" element={<AboutPage />} />
+            <Route path="/about" element={<AboutPage />} />
 
-          <Route path="/privacy" element={<PrivacyPage />} />
+            <Route path="/privacy" element={<PrivacyPage />} />
 
-          {/* Protected User Routes */}
-          <Route
-            path="/dashboard"
-            element={
-              <ProtectedRoute>
-                <DashboardLayout>
-                  <DashboardPage />
-                </DashboardLayout>
-              </ProtectedRoute>
-            }
-          />
+            {/* Protected User Routes */}
+            <Route
+              path="/dashboard"
+              element={
+                <ProtectedRoute>
+                  <DashboardLayout>
+                    <DashboardPage />
+                  </DashboardLayout>
+                </ProtectedRoute>
+              }
+            />
 
-          <Route
-            path="/analyze"
-            element={
-              <ProtectedRoute>
-                <DashboardLayout>
-                  <AnalyzePage />
-                </DashboardLayout>
-              </ProtectedRoute>
-            }
-          />
+            <Route
+              path="/analyze"
+              element={
+                <ProtectedRoute>
+                  <DashboardLayout>
+                    <AnalyzePage />
+                  </DashboardLayout>
+                </ProtectedRoute>
+              }
+            />
 
-          <Route
-            path="/analysis/:id"
-            element={
-              <ProtectedRoute>
-                <DashboardLayout>
-                  <ResultPage />
-                </DashboardLayout>
-              </ProtectedRoute>
-            }
-          />
+            <Route
+              path="/analysis/:id"
+              element={
+                <ProtectedRoute>
+                  <DashboardLayout>
+                    <ResultPage />
+                  </DashboardLayout>
+                </ProtectedRoute>
+              }
+            />
 
-          <Route
-            path="/analysis/:id/report"
-            element={
-              <ProtectedRoute>
-                <ReportPage />
-              </ProtectedRoute>
-            }
-          />
+            <Route
+              path="/analysis/:id/report"
+              element={
+                <ProtectedRoute>
+                  <ReportPage />
+                </ProtectedRoute>
+              }
+            />
 
-          <Route
-            path="/history"
-            element={
-              <ProtectedRoute>
-                <DashboardLayout>
-                  <HistoryPage />
-                </DashboardLayout>
-              </ProtectedRoute>
-            }
-          />
+            <Route
+              path="/history"
+              element={
+                <ProtectedRoute>
+                  <DashboardLayout>
+                    <HistoryPage />
+                  </DashboardLayout>
+                </ProtectedRoute>
+              }
+            />
 
-          <Route
-            path="/profile"
-            element={
-              <ProtectedRoute>
-                <DashboardLayout>
-                  <ProfilePage />
-                </DashboardLayout>
-              </ProtectedRoute>
-            }
-          />
+            <Route
+              path="/profile"
+              element={
+                <ProtectedRoute>
+                  <DashboardLayout>
+                    <ProfilePage />
+                  </DashboardLayout>
+                </ProtectedRoute>
+              }
+            />
 
-          {/* Admin Routes */}
-          <Route
-            path="/admin"
-            element={
-              <AdminRoute>
-                <DashboardLayout>
-                  <AdminDashboardPage />
-                </DashboardLayout>
-              </AdminRoute>
-            }
-          />
+            {/* Admin Routes */}
+            <Route
+              path="/admin"
+              element={
+                <AdminRoute>
+                  <DashboardLayout>
+                    <AdminDashboardPage />
+                  </DashboardLayout>
+                </AdminRoute>
+              }
+            />
 
-          <Route
-            path="/admin/users"
-            element={
-              <AdminRoute>
-                <DashboardLayout>
-                  <AdminUsersPage />
-                </DashboardLayout>
-              </AdminRoute>
-            }
-          />
+            <Route
+              path="/admin/users"
+              element={
+                <AdminRoute>
+                  <DashboardLayout>
+                    <AdminUsersPage />
+                  </DashboardLayout>
+                </AdminRoute>
+              }
+            />
 
-          <Route
-            path="/admin/logs"
-            element={
-              <AdminRoute>
-                <DashboardLayout>
-                  <AdminLogsPage />
-                </DashboardLayout>
-              </AdminRoute>
-            }
-          />
+            <Route
+              path="/admin/logs"
+              element={
+                <AdminRoute>
+                  <DashboardLayout>
+                    <AdminLogsPage />
+                  </DashboardLayout>
+                </AdminRoute>
+              }
+            />
 
-          {/* 404 Route */}
-          <Route path="*" element={<NotFoundPage />} />
-        </Routes>
+            {/* 404 Route */}
+            <Route path="*" element={<NotFoundPage />} />
+          </Routes>
+        </Suspense>
       </div>
 
       <Footer />
