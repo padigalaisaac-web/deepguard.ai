@@ -1,0 +1,38 @@
+services:
+  # Backend FastAPI Web Service
+  - type: web
+    name: deepguard-backend
+    runtime: python
+    buildCommand: "cd backend && pip install -r requirements.txt"
+    startCommand: "cd backend && uvicorn app.main:app --host 0.0.0.0 --port $PORT"
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.0
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DEMO_MODE
+        value: "true"
+      - key: CORS_ORIGINS
+        value: '["*"]'
+      - key: SUPABASE_URL
+        value: "https://qswmlpkwkmombazplgcx.supabase.co"
+      - key: SUPABASE_ANON_KEY
+        value: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFzd21scGt3a21vbWJhenBsZ2N4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkxOTU0MTEsImV4cCI6MjEwNDc3MTQxMX0.t6EPxvSnrOrCxl6ADJ8N0GntMtoIjyG29StTSl-sXbI"
+
+  # Frontend React Static Site
+  - type: web
+    name: deepguard-ai
+    runtime: static
+    buildCommand: "cd frontend && npm install && npm run build"
+    staticPublishPath: "./frontend/dist"
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      - key: VITE_API_URL
+        value: "https://deepguard-backend-0x0q.onrender.com"
+      - key: VITE_SUPABASE_URL
+        value: "https://qswmlpkwkmombazplgcx.supabase.co"
+      - key: VITE_SUPABASE_ANON_KEY
+        value: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFzd21scGt3a21vbWJhenBsZ2N4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkxOTU0MTEsImV4cCI6MjEwNDc3MTQxMX0.t6EPxvSnrOrCxl6ADJ8N0GntMtoIjyG29StTSl-sXbI"
