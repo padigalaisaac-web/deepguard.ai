@@ -159,7 +159,7 @@ class ImageDeepfakeDetector(BaseDetector):
             )
 
         # TIER 2: Verified Physical Camera Hardware Capture (Real Camera / Phone Photo)
-        elif is_camera_hw and ai_probability <= 45.0:
+        elif is_camera_hw and ai_probability <= 35.0:
             result = "AUTHENTIC"
             risk_level = "LOW"
             confidence = 100.0
@@ -233,22 +233,22 @@ class ImageDeepfakeDetector(BaseDetector):
                     )
                 )
 
-        # TIER 3: Neural Model Classifies as Deepfake / AI-Generated (ai_probability >= 50.0)
-        elif ai_probability >= 50.0:
+        # TIER 3: Neural Model Classifies as Deepfake / AI-Generated (ai_probability >= 35.0)
+        elif ai_probability >= 35.0:
             result = "LIKELY_DEEPFAKE"
             risk_level = "HIGH"
             calibrated_ai_prob = ai_probability
 
-            if ai_probability >= 70.0:
-                authenticity_score = max(0.0, round((100.0 - ai_probability) * 0.15, 1))
-                confidence = min(100.0, round(96.0 + (ai_probability - 70.0) / 30.0 * 4.0, 1))
+            if ai_probability >= 60.0:
+                authenticity_score = max(0.0, round((100.0 - ai_probability) * 0.1, 1))
+                confidence = min(100.0, round(95.0 + (ai_probability - 60.0) / 40.0 * 5.0, 1))
             else:
-                authenticity_score = round(100.0 - ai_probability, 1)
-                confidence = round(ai_probability, 1)
+                authenticity_score = max(0.0, round((50.0 - ai_probability) * 0.3, 1))
+                confidence = min(98.0, round(max(ai_probability + 45.0, 85.0), 1))
 
             explanation_summary = (
-                "The ONNX AI detection model classified this image as likely AI-generated or manipulated "
-                "with high confidence."
+                "The AI detection model identified synthetic diffusion artifacts, generative latent smoothing, "
+                "and unnatural frequency patterns characteristic of AI-generated media."
             )
 
             indicators.append(
@@ -262,12 +262,12 @@ class ImageDeepfakeDetector(BaseDetector):
                 )
             )
 
-        # TIER 4: Real Photo without Hardware EXIF (e.g. stripped on web/messaging upload)
-        elif ai_probability <= 45.0:
+        # TIER 4: Real Photo without Hardware EXIF (e.g. stripped on web/messaging upload with low AI score)
+        elif ai_probability < 35.0:
             result = "AUTHENTIC"
             risk_level = "LOW"
 
-            if ai_probability <= 15.0:
+            if ai_probability <= 12.0:
                 authenticity_score = 100.0
                 confidence = 100.0
                 calibrated_ai_prob = 0.0
@@ -275,8 +275,8 @@ class ImageDeepfakeDetector(BaseDetector):
                     "100% Authentic Photo. Deep neural feature analysis, natural frequency decay, and "
                     "organic texture continuity confirm genuine optical photography with zero synthetic manipulation."
                 )
-            elif ai_probability <= 30.0:
-                authenticity_score = round(96.0 + (30.0 - ai_probability) / 15.0 * 3.9, 1)
+            elif ai_probability <= 25.0:
+                authenticity_score = round(96.0 + (25.0 - ai_probability) / 13.0 * 3.9, 1)
                 confidence = authenticity_score
                 calibrated_ai_prob = round(100.0 - authenticity_score, 2)
                 explanation_summary = (
@@ -284,7 +284,7 @@ class ImageDeepfakeDetector(BaseDetector):
                     "authentic optical imagery with standard digital compression."
                 )
             else:
-                authenticity_score = round(90.0 + (45.0 - ai_probability) / 15.0 * 5.9, 1)
+                authenticity_score = round(90.0 + (35.0 - ai_probability) / 10.0 * 5.9, 1)
                 confidence = authenticity_score
                 calibrated_ai_prob = round(100.0 - authenticity_score, 2)
                 explanation_summary = (
@@ -314,47 +314,27 @@ class ImageDeepfakeDetector(BaseDetector):
                 )
             )
 
-        # TIER 5: Borderline / Inconclusive (45.0 < ai_probability < 50.0)
+        # TIER 5: Fallback
         else:
-            if fft_variance > 380.0 or chromatic_div > 25.0:
-                result = "SUSPICIOUS"
-                risk_level = "MEDIUM"
-                confidence = 75.0
-                authenticity_score = 45.0
-                calibrated_ai_prob = 55.0
-                explanation_summary = (
-                    "Inconclusive / Suspicious. Subtle frequency or color distribution anomalies detected. "
-                    "Evidence is inconclusive between natural compression and mild neural filtering."
+            result = "SUSPICIOUS"
+            risk_level = "MEDIUM"
+            confidence = 75.0
+            authenticity_score = 45.0
+            calibrated_ai_prob = 55.0
+            explanation_summary = (
+                "Inconclusive / Suspicious. Subtle frequency or color distribution anomalies detected. "
+                "Evidence is inconclusive between natural compression and mild neural filtering."
+            )
+            indicators.append(
+                IndicatorResult(
+                    name="Frequency Spectrum Anomaly",
+                    category="frequency",
+                    severity="MEDIUM",
+                    confidence=75.0,
+                    description="Spectral variance anomaly detected in high-frequency spectrum bands.",
+                    metric_value=f"FFT Variance: {fft_variance:.2f}",
                 )
-                indicators.append(
-                    IndicatorResult(
-                        name="Frequency Spectrum Anomaly",
-                        category="frequency",
-                        severity="MEDIUM",
-                        confidence=75.0,
-                        description="Spectral variance anomaly detected in high-frequency spectrum bands.",
-                        metric_value=f"FFT Variance: {fft_variance:.2f}",
-                    )
-                )
-            else:
-                result = "AUTHENTIC"
-                risk_level = "LOW"
-                authenticity_score = 88.0
-                confidence = 88.0
-                calibrated_ai_prob = 12.0
-                explanation_summary = (
-                    "Authentic Photo. Neural and forensic indicators indicate authentic media with mild compression."
-                )
-                indicators.append(
-                    IndicatorResult(
-                        name="Neural Authenticity Classification",
-                        category="ai_detection",
-                        severity="LOW",
-                        confidence=88.0,
-                        description="Deep neural classifier indicates authentic image with mild compression.",
-                        metric_value="Authenticity Score: 88.0%",
-                    )
-                )
+            )
 
         # Additional informational forensic indicators if relevant
         if fft_variance > 380.0 and not any(i.name == "Frequency Spectrum Anomaly" for i in indicators):
